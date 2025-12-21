@@ -1,0 +1,28 @@
+{
+    "name": "octarine-market-maker",
+    "version": "1.0.0",
+    "description": "Market Maker bot for Octarine instant redemptions and liquidations",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "bid": "ts-node src/instant-redemption-bidding.ts",
+        "liquidate": "ts-node src/liquidation-trigger.ts",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@0x/protocol-utils": "^11.23.0",
+        "@0x/utils": "^7.0.0",
+        "axios": "^1.6.0",
+        "dotenv": "^16.3.1",
+        "ethers": "^5.7.2"
+    },
+    "devDependencies": {
+        "@types/node": "^20.8.0",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.2.2"
+    }
+}

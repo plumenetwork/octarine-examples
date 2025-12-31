@@ -51,7 +51,6 @@ function App() {
                 redemptionAsset,
                 amount,
                 chainId,
-                type: 'instant_redemption'
             })
 
             log(`Quote Type: ${quote.type}`)

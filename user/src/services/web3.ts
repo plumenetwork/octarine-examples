@@ -18,7 +18,7 @@ export async function approveToken(
     const owner = await signer.getAddress();
     const current = await erc20.allowance(owner, spender);
 
-    if (current.gte(amount)) return;
+    if (+(current + '') > +amount) return;
 
     const tx = await erc20.approve(spender, ethers.constants.MaxUint256);
     await tx.wait();

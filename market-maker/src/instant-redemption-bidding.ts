@@ -20,7 +20,6 @@ interface RFQRequest {
     redemptionAsset: string; // Token user wants (we provide)
     redeemAmount: string;
     chainId: number;
-    type: 'instant_redemption' | 'lst';
     status: 'Pending' | 'Bidding' | 'Solved' | 'Cancelled';
     expiry: number;
     metadata?: {
@@ -71,7 +70,6 @@ async function getPendingRequests(): Promise<RFQRequest[]> {
             {
                 params: {
                     status: 'pending,bidding',
-                    type: 'instant_redemption',
                     // chainId: 98866, // Can filter by chain if needed
                     marketMaker: CONFIG.MARKET_MAKER_ADDRESS
                 },

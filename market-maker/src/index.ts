@@ -3,7 +3,7 @@
  * Entry point with health checks and service initialization
  */
 
-import { config } from './config';
+import { initConfig } from './config';
 import { setGlobalLogLevel, createLogger } from './utils/logger';
 import { initWalletManager } from './services/wallet';
 import { initApiClient } from './services/api/client';
@@ -16,6 +16,9 @@ import { startLiquidationMonitor } from './loops/liquidation';
 const logger = createLogger('main');
 
 async function main(): Promise<void> {
+    // Initialize configuration (loads secrets from Secret Manager if enabled)
+    const config = await initConfig();
+
     // Set log level from config
     setGlobalLogLevel(config.logLevel);
 

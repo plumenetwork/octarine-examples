@@ -1,9 +1,11 @@
 /**
  * Configuration loading and validation
+ * Supports both .env and Google Secret Manager for sensitive credentials
  */
 
 import * as dotenv from 'dotenv';
 import { AppConfig, RawEnvConfig } from '../types';
+import { getSecrets, validateSecrets } from '../services/secrets';
 import {
     ConfigValidationError,
     parseChains,
@@ -12,18 +14,22 @@ import {
     parseNumber,
     parseInt_,
     parseLogLevel,
-    validateRequired,
     validateChains,
     validateSpread,
     validateAddress,
-    validatePrivateKey,
     validateUrl,
 } from './validation';
 
 // Load .env file
 dotenv.config();
 
-function loadConfig(): AppConfig {
+// Singleton config instance
+let configInstance: AppConfig | null = null;
+
+/**
+ * Load non-secret configuration from environment
+ */
+function loadBaseConfig(): Omit<AppConfig, 'privateKey' | 'apiKey'> & { privateKey: string; apiKey: string } {
     const env = process.env as unknown as RawEnvConfig;
     const errors: string[] = [];
 
@@ -31,11 +37,11 @@ function loadConfig(): AppConfig {
     const supportedChains = parseChains(env.SUPPORTED_CHAINS || '98866');
     const priceSpread = parseNumber(env.PRICE_SPREAD, 0.98);
     const liquidationSpread = parseNumber(env.LIQUIDATION_SPREAD, 0.99);
+    const useSecretManager = parseBoolean(env.USE_SECRET_MANAGER, false);
+    const slackEnabled = parseBoolean(env.SLACK_ENABLED, false);
+    const wsEnabled = parseBoolean(env.WS_ENABLED, false);
 
-    // Validate required fields
-    const privateKeyError = validatePrivateKey(env.PRIVATE_KEY);
-    if (privateKeyError) errors.push(privateKeyError);
-
+    // Validate address (always required)
     const addressError = validateAddress(env.MARKET_MAKER_ADDRESS, 'MARKET_MAKER_ADDRESS');
     if (addressError) errors.push(addressError);
 
@@ -58,17 +64,20 @@ function loadConfig(): AppConfig {
     if (apiUrlError) errors.push(apiUrlError);
 
     // Validate optional Slack URL if enabled
-    const slackEnabled = parseBoolean(env.SLACK_ENABLED, false);
     if (slackEnabled) {
         const slackUrlError = validateUrl(env.SLACK_WEBHOOK_URL, 'SLACK_WEBHOOK_URL');
         if (slackUrlError) errors.push(slackUrlError);
     }
 
     // Validate optional WebSocket URL if enabled
-    const wsEnabled = parseBoolean(env.WS_ENABLED, false);
     if (wsEnabled) {
         const wsUrlError = validateUrl(env.WS_URL, 'WS_URL');
         if (wsUrlError) errors.push(wsUrlError);
+    }
+
+    // Validate GCP project if Secret Manager is enabled
+    if (useSecretManager && !env.GCP_PROJECT_ID) {
+        errors.push('GCP_PROJECT_ID is required when USE_SECRET_MANAGER is enabled');
     }
 
     // Throw if there are validation errors
@@ -82,9 +91,13 @@ function loadConfig(): AppConfig {
         apiKey: env.MARKET_MAKER_API_KEY || '',
 
         // Wallet Configuration
-        privateKey: env.PRIVATE_KEY!,
+        privateKey: env.PRIVATE_KEY || '',
         marketMakerAddress: env.MARKET_MAKER_ADDRESS!,
         rpcUrl: env.RPC_URL || 'https://rpc.plume.org',
+
+        // Secret Manager
+        useSecretManager,
+        gcpProjectId: env.GCP_PROJECT_ID || '',
 
         // Strategy Settings
         acceptedTokens: parseTokens(env.ACCEPTED_TOKENS),
@@ -118,8 +131,55 @@ function loadConfig(): AppConfig {
     };
 }
 
-// Export singleton config
-export const config = loadConfig();
+/**
+ * Initialize configuration with secrets
+ * Fetches secrets from Secret Manager if enabled, otherwise uses .env
+ */
+export async function initConfig(): Promise<AppConfig> {
+    if (configInstance) {
+        return configInstance;
+    }
+
+    const baseConfig = loadBaseConfig();
+
+    // Fetch secrets from Secret Manager or use env vars
+    const secrets = await getSecrets({
+        useSecretManager: baseConfig.useSecretManager,
+        gcpProjectId: baseConfig.gcpProjectId,
+    });
+
+    // Validate secrets
+    const secretErrors = validateSecrets(secrets);
+    if (secretErrors.length > 0) {
+        throw new ConfigValidationError(secretErrors);
+    }
+
+    configInstance = {
+        ...baseConfig,
+        privateKey: secrets.privateKey,
+        apiKey: secrets.apiKey || baseConfig.apiKey,
+    };
+
+    return configInstance;
+}
+
+/**
+ * Get the initialized config
+ * Throws if config has not been initialized
+ */
+export function getConfig(): AppConfig {
+    if (!configInstance) {
+        throw new Error('Config not initialized. Call initConfig() first.');
+    }
+    return configInstance;
+}
+
+/**
+ * Legacy sync config export for backwards compatibility
+ * Only use this if you're not using Secret Manager
+ * @deprecated Use initConfig() and getConfig() instead
+ */
+export const config = loadBaseConfig() as AppConfig;
 
 // Re-export validation utilities
 export { ConfigValidationError } from './validation';

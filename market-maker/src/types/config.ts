@@ -12,6 +12,10 @@ export interface AppConfig {
     marketMakerAddress: string;
     rpcUrl: string;
 
+    // Secret Manager
+    useSecretManager: boolean;
+    gcpProjectId: string;
+
     // Strategy Settings
     acceptedTokens: string[];
     priceSpread: number;
@@ -51,6 +55,8 @@ export interface RawEnvConfig {
     PRIVATE_KEY?: string;
     MARKET_MAKER_ADDRESS?: string;
     RPC_URL?: string;
+    USE_SECRET_MANAGER?: string;
+    GCP_PROJECT_ID?: string;
     ACCEPTED_TOKENS?: string;
     PRICE_SPREAD?: string;
     LIQUIDATION_SPREAD?: string;

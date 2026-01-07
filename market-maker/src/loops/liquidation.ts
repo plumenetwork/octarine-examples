@@ -5,7 +5,7 @@
 
 import { BigNumber } from '@0x/utils';
 import { Liquidation, LiquidationAmounts, AppConfig } from '../types';
-import { config } from '../config';
+import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 import { delay } from '../utils/delay';
 import { signLimitOrder, calculateExpiry, generateSalt } from '../utils/signing';
@@ -263,7 +263,7 @@ function handleWebSocketEvent(event: WebSocketEvent, cfg: AppConfig): void {
  * Main liquidation monitoring loop
  */
 export async function startLiquidationMonitor(): Promise<void> {
-    const cfg = config;
+    const cfg = getConfig();
 
     logger.info('Starting liquidation monitor', {
         marketMaker: cfg.marketMakerAddress,

@@ -5,7 +5,7 @@
 
 import { BigNumber } from '@0x/utils';
 import { RFQRequest, AppConfig } from '../types';
-import { config } from '../config';
+import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 import { delay } from '../utils/delay';
 import { signLimitOrder, calculateExpiry } from '../utils/signing';
@@ -279,7 +279,7 @@ function handleWebSocketEvent(event: WebSocketEvent, cfg: AppConfig): void {
  * Main bidding loop with polling
  */
 export async function startBiddingLoop(): Promise<void> {
-    const cfg = config;
+    const cfg = getConfig();
 
     logger.info('Starting instant redemption bidding bot', {
         marketMaker: cfg.marketMakerAddress,

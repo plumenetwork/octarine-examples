@@ -44,32 +44,33 @@ export function createDashboardApp(config: DashboardServerConfig): Application {
     app.use(express.static(staticPath));
 
     // SPA fallback - serve index.html for all non-API routes
-    app.get('*', (req, res) => {
-        if (!req.path.startsWith('/api')) {
-            res.sendFile(path.join(staticPath, 'index.html'), (err) => {
-                if (err) {
-                    // If index.html doesn't exist, return a helpful message
-                    res.status(200).send(`
-                        <!DOCTYPE html>
-                        <html>
-                        <head><title>Market Maker Dashboard</title></head>
-                        <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                            <h1>Market Maker Dashboard</h1>
-                            <p>The dashboard UI is not built yet.</p>
-                            <p>API endpoints are available at:</p>
-                            <ul style="list-style: none; padding: 0;">
-                                <li><code>/api/health</code></li>
-                                <li><code>/api/stats?period=7d</code></li>
-                                <li><code>/api/redemptions?period=7d</code></li>
-                                <li><code>/api/liquidations?period=7d</code></li>
-                            </ul>
-                            <p><small>Use Basic Auth with your configured credentials.</small></p>
-                        </body>
-                        </html>
-                    `);
-                }
-            });
+    app.use((req, res, next) => {
+        if (req.path.startsWith('/api')) {
+            return next();
         }
+        res.sendFile(path.join(staticPath, 'index.html'), (err) => {
+            if (err) {
+                // If index.html doesn't exist, return a helpful message
+                res.status(200).send(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Market Maker Dashboard</title></head>
+                    <body style="font-family: system-ui; padding: 40px; text-align: center;">
+                        <h1>Market Maker Dashboard</h1>
+                        <p>The dashboard UI is not built yet.</p>
+                        <p>API endpoints are available at:</p>
+                        <ul style="list-style: none; padding: 0;">
+                            <li><code>/api/health</code></li>
+                            <li><code>/api/stats?period=7d</code></li>
+                            <li><code>/api/redemptions?period=7d</code></li>
+                            <li><code>/api/liquidations?period=7d</code></li>
+                        </ul>
+                        <p><small>Use Basic Auth with your configured credentials.</small></p>
+                    </body>
+                    </html>
+                `);
+            }
+        });
     });
 
     return app;

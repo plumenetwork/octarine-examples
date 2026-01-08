@@ -5,6 +5,7 @@
 
 import { NotificationPayload, NotificationType, Notifier } from './types';
 import { SlackNotifier } from './slack';
+import { DatabaseRecorder } from './database-recorder';
 import { AppConfig } from '../../types';
 import { createLogger } from '../../utils/logger';
 
@@ -17,6 +18,13 @@ export class NotificationService {
     private enabled = false;
 
     constructor(config: AppConfig) {
+        // Database recorder (always enabled when dashboard is enabled)
+        if (config.dashboardEnabled) {
+            this.notifiers.push(new DatabaseRecorder());
+            this.enabled = true;
+            logger.info('Database recording enabled for dashboard');
+        }
+
         if (config.slackEnabled && config.slackWebhookUrl) {
             this.notifiers.push(new SlackNotifier(config.slackWebhookUrl));
             this.enabled = true;

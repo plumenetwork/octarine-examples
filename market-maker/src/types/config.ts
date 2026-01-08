@@ -45,6 +45,13 @@ export interface AppConfig {
     wsEnabled: boolean;
     wsUrl: string;
     wsReconnectIntervalMs: number;
+
+    // Dashboard
+    dashboardEnabled: boolean;
+    dashboardPort: number;
+    dashboardUsername: string;
+    dashboardPassword: string;
+    databasePath: string;
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -73,4 +80,9 @@ export interface RawEnvConfig {
     WS_ENABLED?: string;
     WS_URL?: string;
     WS_RECONNECT_INTERVAL_MS?: string;
+    DASHBOARD_ENABLED?: string;
+    DASHBOARD_PORT?: string;
+    DASHBOARD_USERNAME?: string;
+    DASHBOARD_PASSWORD?: string;
+    DATABASE_PATH?: string;
 }

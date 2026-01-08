@@ -40,6 +40,7 @@ function loadBaseConfig(): Omit<AppConfig, 'privateKey' | 'apiKey'> & { privateK
     const useSecretManager = parseBoolean(env.USE_SECRET_MANAGER, false);
     const slackEnabled = parseBoolean(env.SLACK_ENABLED, false);
     const wsEnabled = parseBoolean(env.WS_ENABLED, false);
+    const dashboardEnabled = parseBoolean(env.DASHBOARD_ENABLED, false);
 
     // Validate address (always required)
     const addressError = validateAddress(env.MARKET_MAKER_ADDRESS, 'MARKET_MAKER_ADDRESS');
@@ -78,6 +79,16 @@ function loadBaseConfig(): Omit<AppConfig, 'privateKey' | 'apiKey'> & { privateK
     // Validate GCP project if Secret Manager is enabled
     if (useSecretManager && !env.GCP_PROJECT_ID) {
         errors.push('GCP_PROJECT_ID is required when USE_SECRET_MANAGER is enabled');
+    }
+
+    // Validate dashboard credentials if enabled
+    if (dashboardEnabled) {
+        if (!env.DASHBOARD_USERNAME) {
+            errors.push('DASHBOARD_USERNAME is required when DASHBOARD_ENABLED is true');
+        }
+        if (!env.DASHBOARD_PASSWORD) {
+            errors.push('DASHBOARD_PASSWORD is required when DASHBOARD_ENABLED is true');
+        }
     }
 
     // Throw if there are validation errors
@@ -128,6 +139,13 @@ function loadBaseConfig(): Omit<AppConfig, 'privateKey' | 'apiKey'> & { privateK
         wsEnabled,
         wsUrl: env.WS_URL || '',
         wsReconnectIntervalMs: parseInt_(env.WS_RECONNECT_INTERVAL_MS, 5000),
+
+        // Dashboard
+        dashboardEnabled,
+        dashboardPort: parseInt_(env.DASHBOARD_PORT, 3000),
+        dashboardUsername: env.DASHBOARD_USERNAME || 'admin',
+        dashboardPassword: env.DASHBOARD_PASSWORD || '',
+        databasePath: env.DATABASE_PATH || './data/market-maker.db',
     };
 }
 

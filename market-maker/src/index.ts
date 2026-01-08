@@ -12,6 +12,7 @@ import { initNotificationService, getNotificationService } from './services/noti
 import { requireHealthy } from './health';
 import { startBiddingLoop } from './loops/bidding';
 import { startLiquidationMonitor } from './loops/liquidation';
+import { startDashboard } from './dashboard';
 
 const logger = createLogger('main');
 
@@ -30,10 +31,16 @@ async function main(): Promise<void> {
         liquidationsEnabled: config.enableLiquidations,
         wsEnabled: config.wsEnabled,
         slackEnabled: config.slackEnabled,
+        dashboardEnabled: config.dashboardEnabled,
     });
 
     // Initialize services
     logger.info('Initializing services...');
+
+    // Dashboard (initializes database first, required for DatabaseRecorder)
+    if (config.dashboardEnabled) {
+        await startDashboard(config);
+    }
 
     // Wallet manager (singleton with mutex for nonce management)
     initWalletManager(config.privateKey, config.rpcUrl);
@@ -41,7 +48,7 @@ async function main(): Promise<void> {
     // API client with retry logic
     initApiClient(config);
 
-    // Notification service (Slack)
+    // Notification service (Slack + DatabaseRecorder if dashboard enabled)
     initNotificationService(config);
 
     // Run health checks before starting loops

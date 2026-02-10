@@ -52,13 +52,21 @@ export function createApiClient(config: ApiClientConfig): AxiosInstance {
         },
         (error: AxiosError) => {
             const status = error.response?.status;
-            const data = error.response?.data;
+            const data = error.response?.data as Record<string, unknown> | undefined;
 
             logger.error('API Response Error', error, {
                 status,
                 url: error.config?.url,
                 data: typeof data === 'object' ? JSON.stringify(data) : data,
             });
+
+            // Enhance error message with API error details
+            if (data && typeof data === 'object' && data.message) {
+                const apiMessage = Array.isArray(data.message)
+                    ? (data.message as string[]).join(', ')
+                    : String(data.message);
+                error.message = `${error.message}: ${apiMessage}`;
+            }
 
             return Promise.reject(error);
         },

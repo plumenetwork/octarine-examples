@@ -10,6 +10,7 @@ import {
     getRedemptionByRequestId,
     insertLiquidation,
     recordBotStatus,
+    insertFailedTransaction,
 } from '../database';
 import { createLogger } from '../../utils/logger';
 
@@ -29,6 +30,14 @@ export class DatabaseRecorder implements Notifier {
 
                 case NotificationType.LIQUIDATION_TRIGGERED:
                     await this.recordLiquidation(payload);
+                    break;
+
+                case NotificationType.API_ERROR:
+                    this.recordFailedTransaction(payload, 'api_error');
+                    break;
+
+                case NotificationType.TX_FAILURE:
+                    this.recordFailedTransaction(payload, 'tx_failure');
                     break;
 
                 case NotificationType.BOT_STARTED:
@@ -131,5 +140,24 @@ export class DatabaseRecorder implements Notifier {
         });
 
         logger.debug('Recorded liquidation to database', { liquidationId });
+    }
+
+    private recordFailedTransaction(payload: NotificationPayload, errorType: string): void {
+        const meta = payload.metadata || {};
+
+        const { operation, error, requestId, liquidationId, txHash, chainId, ...rest } = meta;
+
+        insertFailedTransaction({
+            operation: String(operation || 'unknown'),
+            errorType,
+            errorMessage: String(error || payload.message || 'Unknown error'),
+            requestId: requestId ? String(requestId) : undefined,
+            liquidationId: liquidationId ? String(liquidationId) : undefined,
+            chainId: chainId ? Number(chainId) : undefined,
+            txHash: txHash ? String(txHash) : undefined,
+            context: Object.keys(rest).length > 0 ? rest : undefined,
+        });
+
+        logger.debug('Recorded failed transaction to database', { errorType, operation });
     }
 }

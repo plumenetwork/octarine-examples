@@ -83,3 +83,4 @@ export function getDatabaseSize(): number {
 export * from './redemptions';
 export * from './liquidations';
 export * from './stats';
+export * from './failed-transactions';

@@ -92,4 +92,38 @@ export interface PaginatedResponse<T> {
     };
 }
 
+export interface FailedTransaction {
+    id: number;
+    operation: string;
+    errorType: string;
+    errorMessage: string;
+    requestId: string | null;
+    liquidationId: string | null;
+    chainId: number | null;
+    txHash: string | null;
+    context: Record<string, unknown> | null;
+    status: string;
+    retryCount: number;
+    lastRetryAt: string | null;
+    createdAt: string;
+}
+
+export interface FailedTransactionCounts {
+    failed: number;
+    retrying: number;
+    resolved: number;
+    dismissed: number;
+}
+
+export interface FailedTransactionsResponse {
+    data: FailedTransaction[];
+    counts: FailedTransactionCounts;
+    pagination: {
+        total: number;
+        limit: number;
+        offset: number;
+        hasMore: boolean;
+    };
+}
+
 export type Period = '7d' | '30d' | 'all';

@@ -31,9 +31,9 @@ export async function getPendingRequests(params: GetPendingRequestsParams): Prom
 
         const requests = response.data || [];
 
-        // Filter by supported chains locally
+        // Filter by supported chains locally (coerce to number for API string responses)
         const filtered = requests.filter(req =>
-            params.supportedChains.includes(req.chainId),
+            params.supportedChains.includes(Number(req.chainId)),
         );
 
         logger.info('Fetched pending requests', {

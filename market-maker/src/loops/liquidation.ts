@@ -91,7 +91,7 @@ function shouldLiquidate(liquidation: Liquidation, amounts: LiquidationAmounts, 
     }
 
     // Check supported chains
-    if (!cfg.supportedChains.includes(liquidation.chainId)) {
+    if (!cfg.supportedChains.includes(Number(liquidation.chainId))) {
         logger.debug('Skipping liquidation: unsupported chain', {
             liquidationId: liquidation._id,
             chainId: liquidation.chainId,
@@ -167,6 +167,11 @@ async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig
             walletManager.getWallet(),
         );
 
+        // Extract liquidation bonus from market data
+        const liquidationPenalty = parseFloat(
+            liquidation.borrowedPosition?.market?.liquidationPenalty || '0',
+        );
+
         // Trigger liquidation
         const result = await triggerLiquidation({
             liquidationId,
@@ -175,6 +180,7 @@ async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig
             debtAmountToLiquidate: parseFloat(amounts.debtToRepay) / Math.pow(10, amounts.decimals),
             orderInfo: order,
             expiry: 20,
+            liquidationBonusPercentage: liquidationPenalty,
         });
 
         logger.info('Liquidation triggered successfully', {

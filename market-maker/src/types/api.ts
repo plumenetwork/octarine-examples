@@ -59,8 +59,16 @@ export interface AssetInfo {
     symbol: string;
 }
 
+export interface MarketInfo {
+    id: string;
+    liquidationPenalty?: string;
+    lltv?: string;
+    liquidationThreshold?: string;
+}
+
 export interface AssetPosition {
     asset: AssetInfo;
+    market?: MarketInfo;
 }
 
 export interface Liquidation {
@@ -88,6 +96,7 @@ export interface TriggerLiquidationRequest {
     debtAmountToLiquidate: number;
     orderInfo: SerializedLimitOrder;
     expiry: number;
+    liquidationBonusPercentage: number;
 }
 
 export interface LiquidationAmounts {

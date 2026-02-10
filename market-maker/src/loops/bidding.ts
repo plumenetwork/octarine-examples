@@ -53,7 +53,7 @@ function shouldBidOnRequest(request: RFQRequest, cfg: AppConfig): boolean {
     }
 
     // Check chain (already filtered by API service, but double-check)
-    if (!cfg.supportedChains.includes(request.chainId)) {
+    if (!cfg.supportedChains.includes(Number(request.chainId))) {
         logger.debug('Skipping request: unsupported chain', {
             requestId: request.requestId,
             chainId: request.chainId,
@@ -193,6 +193,10 @@ async function monitorWonBids(cfg: AppConfig): Promise<void> {
                 getNotificationService().notifyTransformExecuted(bid.requestId, result.txHash);
             } catch (error) {
                 logger.error('Failed to trigger transform', error instanceof Error ? error : new Error(String(error)), {
+                    requestId: bid.requestId,
+                });
+
+                getNotificationService().notifyApiError('Transform execution', error instanceof Error ? error : new Error(String(error)), {
                     requestId: bid.requestId,
                 });
             }

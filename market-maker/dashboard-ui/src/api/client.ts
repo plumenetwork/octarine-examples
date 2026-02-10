@@ -4,6 +4,7 @@ import type {
     Redemption,
     Liquidation,
     PaginatedResponse,
+    FailedTransactionsResponse,
     Period,
 } from '../types';
 
@@ -35,11 +36,13 @@ class ApiClient {
         return this.credentials.length > 0;
     }
 
-    private async fetch<T>(endpoint: string): Promise<T> {
+    private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
         const response = await fetch(`${API_BASE}${endpoint}`, {
+            ...options,
             headers: {
                 Authorization: `Basic ${this.credentials}`,
                 'Content-Type': 'application/json',
+                ...options?.headers,
             },
         });
 
@@ -89,6 +92,29 @@ class ApiClient {
             offset: String(offset),
         });
         return this.fetch(`/liquidations?${params}`);
+    }
+
+    async getFailedTransactions(
+        period: Period = '7d',
+        limit = 50,
+        offset = 0,
+        status?: string,
+    ): Promise<FailedTransactionsResponse> {
+        const params = new URLSearchParams({
+            period,
+            limit: String(limit),
+            offset: String(offset),
+        });
+        if (status) params.set('status', status);
+        return this.fetch(`/failed-transactions?${params}`);
+    }
+
+    async retryFailedTransaction(id: number): Promise<{ success: boolean; message: string; txHash?: string }> {
+        return this.fetch(`/failed-transactions/${id}/retry`, { method: 'POST' });
+    }
+
+    async dismissFailedTransaction(id: number): Promise<{ success: boolean; message: string }> {
+        return this.fetch(`/failed-transactions/${id}/dismiss`, { method: 'POST' });
     }
 }
 

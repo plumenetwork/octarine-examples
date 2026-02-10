@@ -50,6 +50,23 @@ CREATE TABLE IF NOT EXISTS bot_status (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Failed transactions table
+CREATE TABLE IF NOT EXISTS failed_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    operation TEXT NOT NULL,
+    error_type TEXT NOT NULL,
+    error_message TEXT NOT NULL,
+    request_id TEXT,
+    liquidation_id TEXT,
+    chain_id INTEGER,
+    tx_hash TEXT,
+    context TEXT,
+    status TEXT DEFAULT 'failed',
+    retry_count INTEGER DEFAULT 0,
+    last_retry_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for time-based queries
 CREATE INDEX IF NOT EXISTS idx_redemptions_created_at ON redemptions(created_at);
 CREATE INDEX IF NOT EXISTS idx_redemptions_chain_id ON redemptions(chain_id);
@@ -57,6 +74,8 @@ CREATE INDEX IF NOT EXISTS idx_redemptions_status ON redemptions(status);
 CREATE INDEX IF NOT EXISTS idx_liquidations_created_at ON liquidations(created_at);
 CREATE INDEX IF NOT EXISTS idx_liquidations_chain_id ON liquidations(chain_id);
 CREATE INDEX IF NOT EXISTS idx_liquidations_status ON liquidations(status);
+CREATE INDEX IF NOT EXISTS idx_failed_tx_created_at ON failed_transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_failed_tx_status ON failed_transactions(status);
 `;
 
 export interface RedemptionRow {
@@ -100,5 +119,21 @@ export interface BotStatusRow {
     id: number;
     event_type: string;
     message: string | null;
+    created_at: string;
+}
+
+export interface FailedTransactionRow {
+    id: number;
+    operation: string;
+    error_type: string;
+    error_message: string;
+    request_id: string | null;
+    liquidation_id: string | null;
+    chain_id: number | null;
+    tx_hash: string | null;
+    context: string | null;
+    status: string;
+    retry_count: number;
+    last_retry_at: string | null;
     created_at: string;
 }

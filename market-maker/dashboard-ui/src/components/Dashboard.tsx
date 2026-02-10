@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { SummaryCards } from './SummaryCards';
 import { EarningsChart } from './EarningsChart';
 import { ActivityTable } from './ActivityTable';
+import { FailedTransactionsTable } from './FailedTransactionsTable';
 import { TimePeriodSelector } from './TimePeriodSelector';
 import { useStats } from '../hooks/useStats';
 import { useHealth } from '../hooks/useHealth';
 import { useRedemptions } from '../hooks/useRedemptions';
 import { useLiquidations } from '../hooks/useLiquidations';
+import { useFailedTransactions } from '../hooks/useFailedTransactions';
 import { apiClient } from '../api/client';
 import type { Period } from '../types';
 
@@ -21,6 +23,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
     const { data: health, isLoading: healthLoading } = useHealth();
     const { data: redemptionsData, isLoading: redemptionsLoading } = useRedemptions(period);
     const { data: liquidationsData, isLoading: liquidationsLoading } = useLiquidations(period);
+    const { data: failedTxData, isLoading: failedTxLoading } = useFailedTransactions(period);
 
     const handleLogout = () => {
         apiClient.clearCredentials();
@@ -60,6 +63,13 @@ export function Dashboard({ onLogout }: DashboardProps) {
                 <EarningsChart
                     data={stats?.trends}
                     isLoading={statsLoading}
+                />
+
+                {/* Failed transactions */}
+                <FailedTransactionsTable
+                    transactions={failedTxData?.data}
+                    counts={failedTxData?.counts}
+                    isLoading={failedTxLoading}
                 />
 
                 {/* Activity table */}

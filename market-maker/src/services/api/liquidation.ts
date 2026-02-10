@@ -33,9 +33,9 @@ export async function getOpenLiquidations(params: GetLiquidationsParams): Promis
 
         const liquidations = response.data || [];
 
-        // Filter by supported chains locally
+        // Filter by supported chains locally (coerce to number for API string responses)
         const filtered = liquidations.filter(liq =>
-            params.supportedChains.includes(liq.chainId),
+            params.supportedChains.includes(Number(liq.chainId)),
         );
 
         logger.info('Fetched liquidation opportunities', {

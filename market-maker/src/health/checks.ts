@@ -13,11 +13,13 @@ export interface HealthCheckResult {
     healthy: boolean;
     name: string;
     message: string;
+    critical: boolean;
     details?: Record<string, unknown>;
 }
 
 export interface HealthCheck {
     name: string;
+    critical: boolean;
     check(): Promise<HealthCheckResult>;
 }
 
@@ -27,6 +29,7 @@ export interface HealthCheck {
 export function createApiConnectivityCheck(config: AppConfig): HealthCheck {
     return {
         name: 'API Connectivity',
+        critical: true,
         async check(): Promise<HealthCheckResult> {
             try {
                 const response = await axios.get(`${config.apiBaseUrl}/health`, {
@@ -36,6 +39,7 @@ export function createApiConnectivityCheck(config: AppConfig): HealthCheck {
                 return {
                     healthy: true,
                     name: 'API Connectivity',
+                    critical: true,
                     message: 'API is reachable',
                     details: { status: response.status },
                 };
@@ -50,12 +54,14 @@ export function createApiConnectivityCheck(config: AppConfig): HealthCheck {
                     return {
                         healthy: true,
                         name: 'API Connectivity',
+                        critical: true,
                         message: 'API is reachable',
                     };
                 } catch (innerError) {
                     return {
                         healthy: false,
                         name: 'API Connectivity',
+                        critical: true,
                         message: `API unreachable: ${innerError instanceof Error ? innerError.message : String(innerError)}`,
                     };
                 }
@@ -70,6 +76,7 @@ export function createApiConnectivityCheck(config: AppConfig): HealthCheck {
 export function createRpcConnectivityCheck(config: AppConfig): HealthCheck {
     return {
         name: 'RPC Connectivity',
+        critical: true,
         async check(): Promise<HealthCheckResult> {
             try {
                 const provider = new ethers.providers.JsonRpcProvider(config.rpcUrl);
@@ -80,6 +87,7 @@ export function createRpcConnectivityCheck(config: AppConfig): HealthCheck {
                     return {
                         healthy: false,
                         name: 'RPC Connectivity',
+                        critical: true,
                         message: `Chain ID mismatch: expected ${expectedChain}, got ${network.chainId}`,
                         details: { expectedChainId: expectedChain, actualChainId: network.chainId },
                     };
@@ -88,6 +96,7 @@ export function createRpcConnectivityCheck(config: AppConfig): HealthCheck {
                 return {
                     healthy: true,
                     name: 'RPC Connectivity',
+                    critical: true,
                     message: 'RPC is reachable and chain ID matches',
                     details: { chainId: network.chainId, name: network.name },
                 };
@@ -95,6 +104,7 @@ export function createRpcConnectivityCheck(config: AppConfig): HealthCheck {
                 return {
                     healthy: false,
                     name: 'RPC Connectivity',
+                    critical: true,
                     message: `RPC unreachable: ${error instanceof Error ? error.message : String(error)}`,
                 };
             }
@@ -108,6 +118,7 @@ export function createRpcConnectivityCheck(config: AppConfig): HealthCheck {
 export function createWalletBalanceCheck(config: AppConfig): HealthCheck {
     return {
         name: 'Wallet Balance',
+        critical: false,
         async check(): Promise<HealthCheckResult> {
             try {
                 const provider = new ethers.providers.JsonRpcProvider(config.rpcUrl);
@@ -121,6 +132,7 @@ export function createWalletBalanceCheck(config: AppConfig): HealthCheck {
                     return {
                         healthy: false,
                         name: 'Wallet Balance',
+                        critical: false,
                         message: `Low balance: ${balanceEth} ETH (minimum: ${minBalanceEth} ETH)`,
                         details: {
                             balance: balanceEth,
@@ -133,6 +145,7 @@ export function createWalletBalanceCheck(config: AppConfig): HealthCheck {
                 return {
                     healthy: true,
                     name: 'Wallet Balance',
+                    critical: false,
                     message: `Balance: ${balanceEth} ETH`,
                     details: {
                         balance: balanceEth,
@@ -143,6 +156,7 @@ export function createWalletBalanceCheck(config: AppConfig): HealthCheck {
                 return {
                     healthy: false,
                     name: 'Wallet Balance',
+                    critical: false,
                     message: `Failed to check balance: ${error instanceof Error ? error.message : String(error)}`,
                 };
             }
@@ -156,6 +170,7 @@ export function createWalletBalanceCheck(config: AppConfig): HealthCheck {
 export function createWalletSigningCheck(config: AppConfig): HealthCheck {
     return {
         name: 'Wallet Signing',
+        critical: true,
         async check(): Promise<HealthCheckResult> {
             try {
                 const wallet = new ethers.Wallet(config.privateKey);
@@ -164,6 +179,7 @@ export function createWalletSigningCheck(config: AppConfig): HealthCheck {
                     return {
                         healthy: false,
                         name: 'Wallet Signing',
+                        critical: true,
                         message: 'Private key does not match MARKET_MAKER_ADDRESS',
                         details: {
                             expected: config.marketMakerAddress,
@@ -179,6 +195,7 @@ export function createWalletSigningCheck(config: AppConfig): HealthCheck {
                 return {
                     healthy: true,
                     name: 'Wallet Signing',
+                    critical: true,
                     message: 'Wallet can sign transactions',
                     details: { address: wallet.address },
                 };
@@ -186,6 +203,7 @@ export function createWalletSigningCheck(config: AppConfig): HealthCheck {
                 return {
                     healthy: false,
                     name: 'Wallet Signing',
+                    critical: true,
                     message: `Invalid private key: ${error instanceof Error ? error.message : String(error)}`,
                 };
             }

@@ -16,12 +16,14 @@ export interface ApiClientConfig {
 }
 
 export function createApiClient(config: ApiClientConfig): AxiosInstance {
+    logger.info('Creating API client with base URL: {config.baseUrl}', {baseUrl: config.baseUrl});
+    logger.info('Creating API client with apiKey : {config.apiKey}', {apiKey: config.apiKey});
     const client = axios.create({
         baseURL: config.baseUrl,
         timeout: config.timeout || 30000,
         headers: {
             'Content-Type': 'application/json',
-            ...(config.apiKey ? { 'x-api-key': config.apiKey } : {}),
+            ...(config.apiKey ? { 'x-api-key': config.apiKey || '' } : {}),
         },
     });
 
@@ -54,9 +56,9 @@ export function createApiClient(config: ApiClientConfig): AxiosInstance {
             const status = error.response?.status;
             const data = error.response?.data as Record<string, unknown> | undefined;
 
-            logger.error('API Response Error', error, {
+            logger.error('API Response Error2222', error, {
                 status,
-                url: error.config?.url,
+                url:  error.config?.baseURL +""+ error.config?.url,
                 data: typeof data === 'object' ? JSON.stringify(data) : data,
             });
 

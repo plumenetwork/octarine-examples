@@ -23,11 +23,12 @@ export async function getOpenLiquidations(params: GetLiquidationsParams): Promis
     try {
         // Try fetching without chainId filter first
         const response = await client.get<ApiResponse<Liquidation[]>>(
-            '/redemptions/liquidations/opportunities',
+            '/octarine/liquidations/opportunities',
             {
                 params: {
                     limit: params.limit || 1000,
                 },
+                timeout: 120000, // 2 min — large payload
             },
         );
 
@@ -62,12 +63,13 @@ async function getOpenLiquidationsPerChain(params: GetLiquidationsParams): Promi
     for (const chainId of params.supportedChains) {
         try {
             const response = await client.get<ApiResponse<Liquidation[]>>(
-                '/redemptions/liquidations/opportunities',
+                '/octarine/liquidations/opportunities',
                 {
                     params: {
                         chainId,
                         limit: params.limit || 1000,
                     },
+                    timeout: 120000,
                 },
             );
 

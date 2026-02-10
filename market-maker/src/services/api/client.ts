@@ -32,8 +32,13 @@ export function createApiClient(config: ApiClientConfig): AxiosInstance {
         (requestConfig) => {
             logger.debug('API Request', {
                 method: requestConfig.method?.toUpperCase(),
-                url: requestConfig.url,
+                url: `${requestConfig.baseURL || ''}${requestConfig.url || ''}`,
+                headers: {
+                    'x-api-key': requestConfig.headers?.['x-api-key'] ? '***' + String(requestConfig.headers['x-api-key']).slice(-4) : 'none',
+                    'Content-Type': requestConfig.headers?.['Content-Type'],
+                },
                 params: requestConfig.params,
+                body: requestConfig.data ? JSON.stringify(requestConfig.data).slice(0, 500) : undefined,
             });
             return requestConfig;
         },

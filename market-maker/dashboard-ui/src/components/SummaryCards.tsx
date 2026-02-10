@@ -26,11 +26,19 @@ function formatUptime(seconds: number): string {
     return `${mins}m`;
 }
 
+function formatCapitalRequired(value: number): string {
+    if (value === 0) return '0';
+    if (value < 0.01) return '<0.01';
+    if (value < 1000) return value.toFixed(2);
+    if (value < 1000000) return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return (value / 1e6).toFixed(2) + 'M';
+}
+
 export function SummaryCards({ stats, health, isLoading }: SummaryCardsProps) {
     if (isLoading) {
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[1, 2, 3, 4].map((i) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className="bg-white rounded-lg shadow p-6 animate-pulse">
                         <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
                         <div className="h-8 bg-gray-200 rounded w-3/4"></div>
@@ -39,6 +47,12 @@ export function SummaryCards({ stats, health, isLoading }: SummaryCardsProps) {
             </div>
         );
     }
+
+    const capitalRequired = stats?.capitalRequired || [];
+    const totalCapital = capitalRequired.reduce((sum, c) => sum + c.totalRequired, 0);
+    const capitalSummary = capitalRequired
+        .map((c) => `${formatCapitalRequired(c.totalRequired)} ${c.debtAssetSymbol} (${c.count})`)
+        .join(', ');
 
     const cards = [
         {
@@ -60,6 +74,12 @@ export function SummaryCards({ stats, health, isLoading }: SummaryCardsProps) {
             color: 'text-purple-600',
         },
         {
+            title: 'Capital Required',
+            value: totalCapital > 0 ? formatCapitalRequired(totalCapital) : '0',
+            subtitle: capitalSummary || 'No pending liquidations',
+            color: totalCapital > 0 ? 'text-orange-600' : 'text-gray-400',
+        },
+        {
             title: 'Bot Status',
             value: health?.status || 'Unknown',
             subtitle: health ? `Uptime: ${formatUptime(health.uptime)}` : '',
@@ -68,7 +88,7 @@ export function SummaryCards({ stats, health, isLoading }: SummaryCardsProps) {
     ];
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {cards.map((card) => (
                 <div key={card.title} className="bg-white rounded-lg shadow p-6">
                     <p className="text-sm text-gray-500 mb-1">{card.title}</p>

@@ -106,7 +106,9 @@ export async function triggerLiquidation(
         debtAmount: params.debtAmountToLiquidate,
     });
 
-    const response = await client.post<{ txHash: string }>(
+    // Use postOnce — do not auto-retry liquidation bids.
+    // Retrying on 429 rate limits makes throttling worse.
+    const response = await client.postOnce<{ txHash: string }>(
         '/redemptions/liquidations/bid',
         params,
     );

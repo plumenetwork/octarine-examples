@@ -127,7 +127,26 @@ export class NotificationService {
         });
     }
 
-    notifyLiquidationTriggered(liquidationId: string, txHash: string, profit?: string): void {
+    notifyLiquidationTriggered(
+        liquidationId: string,
+        txHash: string,
+        details: {
+            profit?: string;
+            borrower?: string;
+            marketId?: string;
+            debtAsset?: string;
+            collateralAsset?: string;
+            debtAssetSymbol?: string;
+            collateralAssetSymbol?: string;
+            borrowedAmount?: string;
+            collateralAmount?: string;
+            debtToRepay?: string;
+            collateralToSeize?: string;
+            makerAmount?: string;
+            healthFactor?: number;
+            chainId?: number;
+        } = {},
+    ): void {
         this.notify({
             type: NotificationType.LIQUIDATION_TRIGGERED,
             timestamp: new Date(),
@@ -137,7 +156,20 @@ export class NotificationService {
             metadata: {
                 liquidationId,
                 txHash,
-                estimatedProfit: profit,
+                estimatedProfit: details.profit,
+                borrower: details.borrower,
+                marketId: details.marketId,
+                debtAsset: details.debtAsset,
+                collateralAsset: details.collateralAsset,
+                debtAssetSymbol: details.debtAssetSymbol,
+                collateralAssetSymbol: details.collateralAssetSymbol,
+                borrowedAmount: details.borrowedAmount,
+                collateralAmount: details.collateralAmount,
+                debtToRepay: details.debtToRepay,
+                collateralToSeize: details.collateralToSeize,
+                makerAmount: details.makerAmount,
+                healthFactor: details.healthFactor,
+                chainId: details.chainId,
             },
         });
     }

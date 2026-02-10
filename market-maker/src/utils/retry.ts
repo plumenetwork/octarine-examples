@@ -41,8 +41,9 @@ export function isRetryableApiError(error: unknown): boolean {
         // HTTP status codes
         const status = err.response?.status;
         if (status) {
-            // Retry on rate limit (429) and server errors (5xx)
-            return status === 429 || status >= 500;
+            // Retry on server errors (5xx) only. Do NOT retry 429 rate limits
+            // — retrying immediately makes throttling worse.
+            return status >= 500;
         }
 
         // Retry on timeout messages

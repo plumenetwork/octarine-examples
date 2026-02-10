@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import { getPeriodStats, getDailyTrends, StatsOptions } from '../../services/database';
+import { getPeriodStats, getDailyTrends, getCapitalRequired, StatsOptions } from '../../services/database';
 import { ethers } from 'ethers';
 
 const router = Router();
@@ -27,6 +27,11 @@ interface StatsResponse {
         earnings: string;
         avgHealthFactor: number | null;
     };
+    capitalRequired: Array<{
+        debtAssetSymbol: string;
+        totalRequired: number;
+        count: number;
+    }>;
     trends: Array<{
         date: string;
         redemptionCount: number;
@@ -46,6 +51,7 @@ router.get('/', (req, res) => {
 
         const stats = getPeriodStats(options);
         const trends = getDailyTrends(options);
+        const capitalRequired = getCapitalRequired();
 
         // Format earnings to ETH
         const totalEarningsWei = stats.totalEarnings;
@@ -76,6 +82,11 @@ router.get('/', (req, res) => {
                 earnings: stats.liquidationEarnings,
                 avgHealthFactor: stats.avgLiquidationHealthFactor,
             },
+            capitalRequired: capitalRequired.map(row => ({
+                debtAssetSymbol: row.debt_asset_symbol,
+                totalRequired: row.total_required,
+                count: row.count,
+            })),
             trends,
         };
 

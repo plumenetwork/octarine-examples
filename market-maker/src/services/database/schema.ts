@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS liquidations (
     market_id TEXT,
     debt_asset TEXT NOT NULL,
     collateral_asset TEXT NOT NULL,
+    debt_asset_symbol TEXT,
+    collateral_asset_symbol TEXT,
+    borrowed_amount TEXT,
+    collateral_amount TEXT,
     debt_to_repay TEXT NOT NULL,
     collateral_to_seize TEXT NOT NULL,
     maker_amount TEXT NOT NULL,
@@ -104,6 +108,10 @@ export interface LiquidationRow {
     market_id: string | null;
     debt_asset: string;
     collateral_asset: string;
+    debt_asset_symbol: string | null;
+    collateral_asset_symbol: string | null;
+    borrowed_amount: string | null;
+    collateral_amount: string | null;
     debt_to_repay: string;
     collateral_to_seize: string;
     maker_amount: string;

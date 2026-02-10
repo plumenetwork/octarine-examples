@@ -11,6 +11,10 @@ export interface InsertLiquidationData {
     marketId?: string;
     debtAsset: string;
     collateralAsset: string;
+    debtAssetSymbol?: string;
+    collateralAssetSymbol?: string;
+    borrowedAmount?: string;
+    collateralAmount?: string;
     debtToRepay: string;
     collateralToSeize: string;
     makerAmount: string;
@@ -27,17 +31,37 @@ export interface UpdateLiquidationData {
 }
 
 /**
- * Insert a new liquidation record
+ * Insert a new liquidation record (upsert: update if already exists)
  */
 export function insertLiquidation(data: InsertLiquidationData): number {
     const db = getDatabase();
 
+    // Check if already exists to avoid UNIQUE constraint violation
+    const existing = getLiquidationById(data.liquidationId);
+    if (existing) {
+        // Update with latest data
+        const updateStmt = db.prepare(`
+            UPDATE liquidations SET
+                tx_hash = COALESCE(?, tx_hash),
+                estimated_profit = COALESCE(?, estimated_profit),
+                status = 'triggered'
+            WHERE liquidation_id = ?
+        `);
+        updateStmt.run(
+            data.txHash || null,
+            data.estimatedProfit || null,
+            data.liquidationId,
+        );
+        return existing.id;
+    }
+
     const stmt = db.prepare(`
         INSERT INTO liquidations (
             liquidation_id, borrower, market_id, debt_asset, collateral_asset,
+            debt_asset_symbol, collateral_asset_symbol, borrowed_amount, collateral_amount,
             debt_to_repay, collateral_to_seize, maker_amount, health_factor,
             chain_id, tx_hash, estimated_profit
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
@@ -46,6 +70,10 @@ export function insertLiquidation(data: InsertLiquidationData): number {
         data.marketId || null,
         data.debtAsset,
         data.collateralAsset,
+        data.debtAssetSymbol || null,
+        data.collateralAssetSymbol || null,
+        data.borrowedAmount || null,
+        data.collateralAmount || null,
         data.debtToRepay,
         data.collateralToSeize,
         data.makerAmount,

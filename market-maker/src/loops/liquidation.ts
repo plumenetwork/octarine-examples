@@ -24,6 +24,7 @@ const processedLiquidations = new Map<string, number>();
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_PROCESSED_ENTRIES = 1000;
 const MAX_LIQUIDATION_RATIO = 0.8;
+const DELAY_BETWEEN_TRIGGERS_MS = 2000; // 2s between API calls to avoid rate limiting
 
 /**
  * Calculate liquidation amounts
@@ -191,7 +192,22 @@ async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig
         getNotificationService().notifyLiquidationTriggered(
             liquidationId,
             result.txHash,
-            amounts.profit,
+            {
+                profit: amounts.profit,
+                borrower: liquidation.borrower,
+                marketId: liquidation.marketId,
+                debtAsset: liquidation.borrowedPosition?.asset?.id,
+                collateralAsset: liquidation.collateralAsset,
+                debtAssetSymbol: liquidation.borrowedPosition?.asset?.symbol,
+                collateralAssetSymbol: liquidation.collateralPosition?.asset?.symbol,
+                borrowedAmount: liquidation.borrowedAmount,
+                collateralAmount: liquidation.collateralAmount,
+                debtToRepay: amounts.debtToRepay,
+                collateralToSeize: amounts.collateralToSeize,
+                makerAmount: makerAmount,
+                healthFactor: liquidation.healthFactor,
+                chainId: Number(liquidation.chainId),
+            },
         );
 
     } catch (error) {
@@ -201,6 +217,12 @@ async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig
 
         getNotificationService().notifyApiError('Liquidation trigger', error instanceof Error ? error : new Error(String(error)), {
             liquidationId,
+            chainId: Number(liquidation.chainId),
+            borrower: liquidation.borrower,
+            marketId: liquidation.marketId,
+            debtAsset: liquidation.borrowedPosition?.asset?.id,
+            collateralAsset: liquidation.collateralAsset,
+            healthFactor: liquidation.healthFactor,
         });
     }
 }
@@ -300,6 +322,9 @@ export async function startLiquidationMonitor(): Promise<void> {
 
                 await processSingleLiquidation(liquidation, cfg);
                 processedLiquidations.set(liquidation._id, Date.now());
+
+                // Delay between triggers to avoid API rate limiting (429)
+                await delay(DELAY_BETWEEN_TRIGGERS_MS);
             }
 
             // Cleanup old entries

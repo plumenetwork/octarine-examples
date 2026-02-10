@@ -194,6 +194,32 @@ export function getDailyTrends(options: StatsOptions = {}): DailyTrend[] {
     return trends.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface CapitalRequiredRow {
+    debt_asset_symbol: string;
+    total_required: number;
+    count: number;
+}
+
+/**
+ * Get total capital required for unfulfilled liquidations
+ * Groups by debt asset symbol and sums the borrowed_amount * 0.8 (liquidation ratio)
+ */
+export function getCapitalRequired(): CapitalRequiredRow[] {
+    const db = getDatabase();
+
+    const stmt = db.prepare(`
+        SELECT
+            COALESCE(NULLIF(debt_asset_symbol, ''), 'Unknown') as debt_asset_symbol,
+            COALESCE(SUM(CAST(NULLIF(borrowed_amount, '') AS REAL) * 0.8), 0) as total_required,
+            COUNT(*) as count
+        FROM liquidations
+        WHERE status = 'triggered'
+        GROUP BY debt_asset_symbol
+    `);
+
+    return stmt.all() as CapitalRequiredRow[];
+}
+
 /**
  * Record bot status event
  */

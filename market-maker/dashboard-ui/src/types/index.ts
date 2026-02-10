@@ -14,6 +14,12 @@ export interface HealthResponse {
     timestamp: string;
 }
 
+export interface CapitalRequired {
+    debtAssetSymbol: string;
+    totalRequired: number;
+    count: number;
+}
+
 export interface StatsResponse {
     summary: {
         totalRedemptions: number;
@@ -33,6 +39,7 @@ export interface StatsResponse {
         earnings: string;
         avgHealthFactor: number | null;
     };
+    capitalRequired: CapitalRequired[];
     trends: DailyTrend[];
 }
 
@@ -71,6 +78,10 @@ export interface Liquidation {
     marketId: string | null;
     debtAsset: string;
     collateralAsset: string;
+    debtAssetSymbol: string | null;
+    collateralAssetSymbol: string | null;
+    borrowedAmount: string | null;
+    collateralAmount: string | null;
     debtToRepay: string;
     collateralToSeize: string;
     makerAmount: string;

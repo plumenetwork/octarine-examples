@@ -109,7 +109,7 @@ export async function triggerLiquidation(
     // Use postOnce — do not auto-retry liquidation bids.
     // Retrying on 429 rate limits makes throttling worse.
     const response = await client.postOnce<{ txHash: string }>(
-        '/redemptions/liquidations/bid',
+        '/octarine/liquidations/bid',
         params,
     );
 

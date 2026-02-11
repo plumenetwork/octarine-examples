@@ -6,7 +6,7 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { createBasicAuthMiddleware } from './middleware/auth';
-import { healthRoutes, statsRoutes, redemptionsRoutes, liquidationsRoutes, failedTransactionsRoutes } from './routes';
+import { healthRoutes, statsRoutes, redemptionsRoutes, liquidationsRoutes, failedTransactionsRoutes, logsRoutes } from './routes';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('dashboard-server');
@@ -39,6 +39,7 @@ export function createDashboardApp(config: DashboardServerConfig): Application {
     app.use('/api/redemptions', authMiddleware, redemptionsRoutes);
     app.use('/api/liquidations', authMiddleware, liquidationsRoutes);
     app.use('/api/failed-transactions', authMiddleware, failedTransactionsRoutes);
+    app.use('/api/logs', authMiddleware, logsRoutes);
 
     // Serve React SPA in production
     const staticPath = path.join(__dirname, '../../dashboard-ui/dist');

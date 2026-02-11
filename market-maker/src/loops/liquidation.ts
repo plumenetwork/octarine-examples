@@ -4,6 +4,7 @@
  */
 
 import { BigNumber } from '@0x/utils';
+import { ethers } from 'ethers';
 import { Liquidation, LiquidationAmounts, AppConfig } from '../types';
 import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
@@ -25,6 +26,52 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_PROCESSED_ENTRIES = 1000;
 const MAX_LIQUIDATION_RATIO = 0.8;
 const DELAY_BETWEEN_TRIGGERS_MS = 2000; // 2s between API calls to avoid rate limiting
+
+/**
+ * Tracks available token balances during a liquidation batch.
+ * Fetches once from chain, then decrements as we commit to liquidations.
+ */
+class BalanceTracker {
+    private balances = new Map<string, ethers.BigNumber>();
+
+    async loadBalance(tokenAddress: string): Promise<void> {
+        if (this.balances.has(tokenAddress.toLowerCase())) return;
+        const walletManager = getWalletManager();
+        try {
+            const balance = await walletManager.getTokenBalance(tokenAddress);
+            this.balances.set(tokenAddress.toLowerCase(), balance);
+            logger.info('Loaded token balance', {
+                token: tokenAddress.slice(0, 10),
+                balance: balance.toString(),
+            });
+        } catch (error) {
+            logger.warn('Failed to load token balance, allowing liquidation', {
+                token: tokenAddress,
+                error: error instanceof Error ? error.message : String(error),
+            });
+            // If we can't check, set a very high balance so we don't block
+            this.balances.set(tokenAddress.toLowerCase(), ethers.constants.MaxUint256);
+        }
+    }
+
+    hasEnough(tokenAddress: string, amount: string): boolean {
+        const balance = this.balances.get(tokenAddress.toLowerCase());
+        if (!balance) return true; // If not tracked, allow
+        return balance.gte(ethers.BigNumber.from(amount));
+    }
+
+    deduct(tokenAddress: string, amount: string): void {
+        const key = tokenAddress.toLowerCase();
+        const balance = this.balances.get(key);
+        if (balance) {
+            this.balances.set(key, balance.sub(ethers.BigNumber.from(amount)));
+        }
+    }
+
+    getBalance(tokenAddress: string): string {
+        return this.balances.get(tokenAddress.toLowerCase())?.toString() || '0';
+    }
+}
 
 /**
  * Calculate liquidation amounts
@@ -114,7 +161,11 @@ function shouldLiquidate(liquidation: Liquidation, amounts: LiquidationAmounts, 
 /**
  * Process a single liquidation
  */
-async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig): Promise<void> {
+async function processSingleLiquidation(
+    liquidation: Liquidation,
+    cfg: AppConfig,
+    balanceTracker?: BalanceTracker,
+): Promise<void> {
     const liquidationId = liquidation._id;
 
     try {
@@ -143,11 +194,28 @@ async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig
         const makerAmountWithBuffer = new BigNumber(makerAmount).multipliedBy(1.01).integerValue().toString();
         const takerAmountWithBuffer = new BigNumber(amounts.collateralToSeize).multipliedBy(1.01).integerValue().toString();
 
+        // Check balance before proceeding
+        const debtToken = liquidation.borrowedPosition.asset.id;
+        if (balanceTracker) {
+            await balanceTracker.loadBalance(debtToken);
+
+            if (!balanceTracker.hasEnough(debtToken, makerAmountWithBuffer)) {
+                const debtSymbol = liquidation.borrowedPosition?.asset?.symbol || 'token';
+                logger.warn('Skipping liquidation: insufficient balance', {
+                    liquidationId,
+                    debtToken: debtSymbol,
+                    required: makerAmountWithBuffer,
+                    available: balanceTracker.getBalance(debtToken),
+                });
+                return;
+            }
+        }
+
         // Approve token
         await approveTokenToExchangeProxy(
             liquidation.exchangeProxy,
             makerAmountWithBuffer,
-            liquidation.borrowedPosition.asset.id,
+            debtToken,
             walletManager,
         );
 
@@ -158,7 +226,7 @@ async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig
                 verifyingContract: liquidation.exchangeProxy,
                 maker: cfg.marketMakerAddress,
                 taker: '0x0000000000000000000000000000000000000000',
-                makerToken: liquidation.borrowedPosition.asset.id,
+                makerToken: debtToken,
                 takerToken: liquidation.collateralAsset,
                 makerAmount: makerAmountWithBuffer,
                 takerAmount: takerAmountWithBuffer,
@@ -184,6 +252,11 @@ async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig
             liquidationBonusPercentage: liquidationPenalty,
         });
 
+        // Deduct from tracked balance after successful trigger
+        if (balanceTracker) {
+            balanceTracker.deduct(debtToken, makerAmountWithBuffer);
+        }
+
         logger.info('Liquidation triggered successfully', {
             liquidationId,
             txHash: result.txHash,
@@ -196,7 +269,7 @@ async function processSingleLiquidation(liquidation: Liquidation, cfg: AppConfig
                 profit: amounts.profit,
                 borrower: liquidation.borrower,
                 marketId: liquidation.marketId,
-                debtAsset: liquidation.borrowedPosition?.asset?.id,
+                debtAsset: debtToken,
                 collateralAsset: liquidation.collateralAsset,
                 debtAssetSymbol: liquidation.borrowedPosition?.asset?.symbol,
                 collateralAssetSymbol: liquidation.collateralPosition?.asset?.symbol,
@@ -315,12 +388,26 @@ export async function startLiquidationMonitor(): Promise<void> {
 
             logger.debug('Found liquidation opportunities', { count: liquidations.length });
 
+            // Fresh balance tracker for each poll cycle
+            const balanceTracker = new BalanceTracker();
+
+            // Pre-load balances for all unique debt tokens in this batch
+            const debtTokens = new Set(
+                liquidations
+                    .filter(l => !processedLiquidations.has(l._id))
+                    .map(l => l.borrowedPosition?.asset?.id)
+                    .filter(Boolean),
+            );
+            for (const token of debtTokens) {
+                await balanceTracker.loadBalance(token);
+            }
+
             for (const liquidation of liquidations) {
                 if (processedLiquidations.has(liquidation._id)) {
                     continue;
                 }
 
-                await processSingleLiquidation(liquidation, cfg);
+                await processSingleLiquidation(liquidation, cfg, balanceTracker);
                 processedLiquidations.set(liquidation._id, Date.now());
 
                 // Delay between triggers to avoid API rate limiting (429)

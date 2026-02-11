@@ -14,16 +14,21 @@ export interface AuthConfig {
  */
 export function createBasicAuthMiddleware(config: AuthConfig) {
     return (req: Request, res: Response, next: NextFunction): void => {
+        // Support auth via header or query param (needed for EventSource/SSE)
         const authHeader = req.headers.authorization;
+        const authQuery = req.query.auth as string | undefined;
 
-        if (!authHeader || !authHeader.startsWith('Basic ')) {
+        const base64Credentials = authHeader?.startsWith('Basic ')
+            ? authHeader.split(' ')[1]
+            : authQuery;
+
+        if (!base64Credentials) {
             res.set('WWW-Authenticate', 'Basic realm="Market Maker Dashboard"');
             res.status(401).json({ error: 'Authentication required' });
             return;
         }
 
         try {
-            const base64Credentials = authHeader.split(' ')[1];
             const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
             const [username, password] = credentials.split(':');
 

@@ -50,6 +50,18 @@ export class WalletManager {
     }
 
     /**
+     * Get ERC20 token balance
+     */
+    async getTokenBalance(tokenAddress: string): Promise<ethers.BigNumber> {
+        const erc20 = new ethers.Contract(
+            tokenAddress,
+            ['function balanceOf(address) view returns (uint256)'],
+            this.provider,
+        );
+        return erc20.balanceOf(this.wallet.address);
+    }
+
+    /**
      * Sync nonce from the blockchain
      */
     async syncNonce(): Promise<void> {

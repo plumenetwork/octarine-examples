@@ -3,6 +3,7 @@ import { SummaryCards } from './SummaryCards';
 import { EarningsChart } from './EarningsChart';
 import { ActivityTable } from './ActivityTable';
 import { FailedTransactionsTable } from './FailedTransactionsTable';
+import { LogViewer } from './LogViewer';
 import { TimePeriodSelector } from './TimePeriodSelector';
 import { useStats } from '../hooks/useStats';
 import { useHealth } from '../hooks/useHealth';
@@ -64,6 +65,9 @@ export function Dashboard({ onLogout }: DashboardProps) {
                     data={stats?.trends}
                     isLoading={statsLoading}
                 />
+
+                {/* Bot logs */}
+                <LogViewer />
 
                 {/* Failed transactions */}
                 <FailedTransactionsTable

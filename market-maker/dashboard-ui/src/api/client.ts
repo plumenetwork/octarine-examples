@@ -36,6 +36,10 @@ class ApiClient {
         return this.credentials.length > 0;
     }
 
+    getCredentials(): string {
+        return this.credentials;
+    }
+
     private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
         const response = await fetch(`${API_BASE}${endpoint}`, {
             ...options,

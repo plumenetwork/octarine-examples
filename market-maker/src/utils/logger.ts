@@ -2,6 +2,7 @@
  * Structured logging utility with configurable levels
  */
 
+import { EventEmitter } from 'events';
 import { LogLevel } from '../types';
 
 export interface LogContext {
@@ -87,6 +88,16 @@ export class Logger {
 
         const output = this.formatOutput(entry);
 
+        // Broadcast to SSE clients
+        logBroadcaster.push({
+            timestamp: entry.timestamp,
+            level: entry.level,
+            module: this.module,
+            message: entry.message,
+            context: entry.context,
+            error: entry.error ? { name: entry.error.name, message: entry.error.message } : undefined,
+        });
+
         if (level === 'error') {
             console.error(output);
             if (error?.stack && this.level === 'debug') {
@@ -123,6 +134,39 @@ export class Logger {
         this.level = level;
     }
 }
+
+/**
+ * LogBroadcaster — singleton EventEmitter that streams log entries to SSE clients.
+ * Keeps a circular buffer of the last N entries so new clients get recent history.
+ */
+const LOG_BUFFER_SIZE = 200;
+
+export interface BroadcastLogEntry {
+    timestamp: string;
+    level: LogLevel;
+    module: string;
+    message: string;
+    context?: LogContext;
+    error?: { name: string; message: string };
+}
+
+class LogBroadcaster extends EventEmitter {
+    private buffer: BroadcastLogEntry[] = [];
+
+    push(entry: BroadcastLogEntry) {
+        this.buffer.push(entry);
+        if (this.buffer.length > LOG_BUFFER_SIZE) {
+            this.buffer.shift();
+        }
+        this.emit('log', entry);
+    }
+
+    getBuffer(): BroadcastLogEntry[] {
+        return [...this.buffer];
+    }
+}
+
+export const logBroadcaster = new LogBroadcaster();
 
 // Factory function to create loggers
 let globalLogLevel: LogLevel = 'info';

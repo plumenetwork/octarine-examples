@@ -74,6 +74,7 @@ export interface Redemption {
 export interface Liquidation {
     id: number;
     liquidationId: string;
+    bidId: string | null;
     borrower: string;
     marketId: string | null;
     debtAsset: string;

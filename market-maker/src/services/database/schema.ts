@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS redemptions (
 CREATE TABLE IF NOT EXISTS liquidations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     liquidation_id TEXT UNIQUE NOT NULL,
+    bid_id TEXT,
     borrower TEXT NOT NULL,
     market_id TEXT,
     debt_asset TEXT NOT NULL,
@@ -41,9 +42,29 @@ CREATE TABLE IF NOT EXISTS liquidations (
     health_factor REAL,
     chain_id INTEGER NOT NULL,
     tx_hash TEXT,
-    status TEXT DEFAULT 'triggered',
+    status TEXT DEFAULT 'pending',
     estimated_profit TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Liquidation opportunities table (synced from API)
+CREATE TABLE IF NOT EXISTS opportunities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    liquidation_id TEXT UNIQUE NOT NULL,
+    market_id TEXT,
+    borrower TEXT,
+    collateral_asset TEXT,
+    debt_asset TEXT,
+    collateral_asset_symbol TEXT,
+    debt_asset_symbol TEXT,
+    collateral_amount TEXT,
+    borrowed_amount TEXT,
+    collateral_amount_seizeable TEXT,
+    health_factor REAL,
+    chain_id INTEGER,
+    base_feed_price REAL,
+    status TEXT,
+    synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Bot status table
@@ -104,6 +125,7 @@ export interface RedemptionRow {
 export interface LiquidationRow {
     id: number;
     liquidation_id: string;
+    bid_id: string | null;
     borrower: string;
     market_id: string | null;
     debt_asset: string;
@@ -121,6 +143,25 @@ export interface LiquidationRow {
     status: string;
     estimated_profit: string | null;
     created_at: string;
+}
+
+export interface OpportunityRow {
+    id: number;
+    liquidation_id: string;
+    market_id: string | null;
+    borrower: string | null;
+    collateral_asset: string | null;
+    debt_asset: string | null;
+    collateral_asset_symbol: string | null;
+    debt_asset_symbol: string | null;
+    collateral_amount: string | null;
+    borrowed_amount: string | null;
+    collateral_amount_seizeable: string | null;
+    health_factor: number | null;
+    chain_id: number | null;
+    base_feed_price: number | null;
+    status: string | null;
+    synced_at: string;
 }
 
 export interface BotStatusRow {

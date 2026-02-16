@@ -8,3 +8,4 @@ export { redemptionsRoutes } from './redemptions';
 export { liquidationsRoutes } from './liquidations';
 export { failedTransactionsRoutes } from './failed-transactions';
 export { logsRoutes } from './logs';
+export { opportunitiesRoutes } from './opportunities';

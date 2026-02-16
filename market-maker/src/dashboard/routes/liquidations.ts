@@ -23,6 +23,7 @@ router.get('/', (req, res) => {
         const transformedData = data.map(row => ({
             id: row.id,
             liquidationId: row.liquidation_id,
+            bidId: row.bid_id,
             borrower: row.borrower,
             marketId: row.market_id,
             debtAsset: row.debt_asset,

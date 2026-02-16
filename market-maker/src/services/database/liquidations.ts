@@ -7,6 +7,7 @@ import { LiquidationRow } from './schema';
 
 export interface InsertLiquidationData {
     liquidationId: string;
+    bidId?: string;
     borrower: string;
     marketId?: string;
     debtAsset: string;
@@ -27,6 +28,7 @@ export interface InsertLiquidationData {
 export interface UpdateLiquidationData {
     status?: string;
     txHash?: string;
+    bidId?: string;
     estimatedProfit?: string;
 }
 
@@ -42,14 +44,17 @@ export function insertLiquidation(data: InsertLiquidationData): number {
         // Update with latest data
         const updateStmt = db.prepare(`
             UPDATE liquidations SET
+                bid_id = COALESCE(?, bid_id),
                 tx_hash = COALESCE(?, tx_hash),
                 estimated_profit = COALESCE(?, estimated_profit),
-                status = 'triggered'
+                status = COALESCE(?, status)
             WHERE liquidation_id = ?
         `);
         updateStmt.run(
+            data.bidId || null,
             data.txHash || null,
             data.estimatedProfit || null,
+            'pending',
             data.liquidationId,
         );
         return existing.id;
@@ -57,15 +62,16 @@ export function insertLiquidation(data: InsertLiquidationData): number {
 
     const stmt = db.prepare(`
         INSERT INTO liquidations (
-            liquidation_id, borrower, market_id, debt_asset, collateral_asset,
+            liquidation_id, bid_id, borrower, market_id, debt_asset, collateral_asset,
             debt_asset_symbol, collateral_asset_symbol, borrowed_amount, collateral_amount,
             debt_to_repay, collateral_to_seize, maker_amount, health_factor,
-            chain_id, tx_hash, estimated_profit
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            chain_id, tx_hash, status, estimated_profit
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
         data.liquidationId,
+        data.bidId || null,
         data.borrower,
         data.marketId || null,
         data.debtAsset,
@@ -80,6 +86,7 @@ export function insertLiquidation(data: InsertLiquidationData): number {
         data.healthFactor || null,
         data.chainId,
         data.txHash || null,
+        'pending',
         data.estimatedProfit || null,
     );
 
@@ -102,6 +109,10 @@ export function updateLiquidation(liquidationId: string, data: UpdateLiquidation
     if (data.txHash !== undefined) {
         updates.push('tx_hash = ?');
         values.push(data.txHash);
+    }
+    if (data.bidId !== undefined) {
+        updates.push('bid_id = ?');
+        values.push(data.bidId);
     }
     if (data.estimatedProfit !== undefined) {
         updates.push('estimated_profit = ?');
@@ -129,6 +140,21 @@ export function getLiquidationById(liquidationId: string): LiquidationRow | unde
     return stmt.get(liquidationId) as LiquidationRow | undefined;
 }
 
+/**
+ * Get liquidations that are still pending (no txHash yet)
+ * Used by the status poller to check for execution results
+ */
+export function getPendingLiquidations(limit = 50): LiquidationRow[] {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+        SELECT * FROM liquidations
+        WHERE status = 'pending' AND (tx_hash IS NULL OR tx_hash = '')
+        ORDER BY created_at DESC
+        LIMIT ?
+    `);
+    return stmt.all(limit) as LiquidationRow[];
+}
+
 export interface GetLiquidationsOptions {
     period?: '7d' | '30d' | 'all';
     chainId?: number;
@@ -150,32 +176,34 @@ export function getLiquidations(options: GetLiquidationsOptions = {}): { data: L
     // Period filter
     if (period !== 'all') {
         const days = period === '7d' ? 7 : 30;
-        conditions.push(`created_at >= datetime('now', '-${days} days')`);
+        conditions.push(`l.created_at >= datetime('now', '-${days} days')`);
     }
 
     // Chain filter
     if (chainId !== undefined) {
-        conditions.push('chain_id = ?');
+        conditions.push('l.chain_id = ?');
         params.push(chainId);
     }
 
     // Status filter
     if (status) {
-        conditions.push('status = ?');
+        conditions.push('l.status = ?');
         params.push(status);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // Get total count
-    const countStmt = db.prepare(`SELECT COUNT(*) as count FROM liquidations ${whereClause}`);
+    const countStmt = db.prepare(`SELECT COUNT(*) as count FROM liquidations l ${whereClause}`);
     const { count } = countStmt.get(...params) as { count: number };
 
-    // Get paginated data
+    // Get paginated data, LEFT JOIN with opportunities to fill in missing borrower
     const dataStmt = db.prepare(`
-        SELECT * FROM liquidations
+        SELECT l.*, COALESCE(NULLIF(l.borrower, ''), o.borrower) AS borrower
+        FROM liquidations l
+        LEFT JOIN opportunities o ON l.liquidation_id = o.liquidation_id
         ${whereClause}
-        ORDER BY created_at DESC
+        ORDER BY l.created_at DESC
         LIMIT ? OFFSET ?
     `);
 

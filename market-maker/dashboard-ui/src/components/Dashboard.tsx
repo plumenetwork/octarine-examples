@@ -4,6 +4,7 @@ import { EarningsChart } from './EarningsChart';
 import { ActivityTable } from './ActivityTable';
 import { FailedTransactionsTable } from './FailedTransactionsTable';
 import { LogViewer } from './LogViewer';
+import { OpportunitySync } from './OpportunitySync';
 import { TimePeriodSelector } from './TimePeriodSelector';
 import { useStats } from '../hooks/useStats';
 import { useHealth } from '../hooks/useHealth';
@@ -82,6 +83,9 @@ export function Dashboard({ onLogout }: DashboardProps) {
                     liquidations={liquidationsData?.data}
                     isLoading={redemptionsLoading || liquidationsLoading}
                 />
+
+                {/* Opportunity sync */}
+                <OpportunitySync />
 
                 {/* Bot info */}
                 {health && (

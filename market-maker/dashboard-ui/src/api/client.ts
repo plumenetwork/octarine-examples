@@ -120,6 +120,27 @@ class ApiClient {
     async dismissFailedTransaction(id: number): Promise<{ success: boolean; message: string }> {
         return this.fetch(`/failed-transactions/${id}/dismiss`, { method: 'POST' });
     }
+
+    async getOpportunitySyncStatus(): Promise<SyncStatus> {
+        return this.fetch('/opportunities/status');
+    }
+
+    async triggerOpportunitySync(): Promise<{ message: string }> {
+        return this.fetch('/opportunities/sync', { method: 'POST' });
+    }
+}
+
+export interface SyncStatus {
+    dbCount: number;
+    apiTotal: number | null;
+    syncRequired: boolean;
+    syncInProgress: boolean;
+    lastSync: {
+        syncedAt: string;
+        inserted: number;
+        updated: number;
+        totalApi: number;
+    } | null;
 }
 
 export const apiClient = new ApiClient();

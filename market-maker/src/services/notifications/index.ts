@@ -129,7 +129,7 @@ export class NotificationService {
 
     notifyLiquidationTriggered(
         liquidationId: string,
-        txHash: string,
+        bidId: string,
         details: {
             profit?: string;
             borrower?: string;
@@ -151,11 +151,11 @@ export class NotificationService {
             type: NotificationType.LIQUIDATION_TRIGGERED,
             timestamp: new Date(),
             severity: 'success',
-            title: 'Liquidation Triggered',
-            message: `Successfully triggered liquidation ${liquidationId}.`,
+            title: 'Liquidation Bid Submitted',
+            message: `Bid submitted for liquidation ${liquidationId}.`,
             metadata: {
                 liquidationId,
-                txHash,
+                bidId,
                 estimatedProfit: details.profit,
                 borrower: details.borrower,
                 marketId: details.marketId,

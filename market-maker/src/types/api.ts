@@ -69,6 +69,7 @@ export interface MarketInfo {
 export interface AssetPosition {
     asset: AssetInfo;
     market?: MarketInfo;
+    account?: { id: string };
 }
 
 export interface Liquidation {
@@ -114,6 +115,22 @@ export interface LiquidationAmounts {
 export interface ApiResponse<T> {
     data: T;
     message?: string;
+}
+
+export interface PaginatedApiResponse<T> {
+    data: T[];
+    totalItems: number;
+    page: number;
+    limit: number;
+}
+
+export interface LiquidationBidResponse {
+    bidId: string;
+    liquidationId: string;
+    status: string;
+    marketMaker: string;
+    makerAmount: string;
+    takerAmount: string;
 }
 
 export interface ApiError {

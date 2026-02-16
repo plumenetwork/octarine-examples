@@ -12,7 +12,8 @@ import { delay } from '../utils/delay';
 import { signLimitOrder, calculateExpiry, generateSalt } from '../utils/signing';
 import { getWalletManager } from '../services/wallet';
 import { approveTokenToExchangeProxy } from '../services/wallet/approvals';
-import { getOpenLiquidations, triggerLiquidation } from '../services/api/liquidation';
+import { getOpenLiquidations, triggerLiquidation, getLiquidationStatus } from '../services/api/liquidation';
+import { getPendingLiquidations, updateLiquidation } from '../services/database/liquidations';
 import { getNotificationService } from '../services/notifications';
 import { getWebSocket, WebSocketEvent } from '../services/api/websocket';
 
@@ -241,7 +242,7 @@ async function processSingleLiquidation(
             liquidation.borrowedPosition?.market?.liquidationPenalty || '0',
         );
 
-        // Trigger liquidation
+        // Submit liquidation bid
         const result = await triggerLiquidation({
             liquidationId,
             marketMaker: cfg.marketMakerAddress,
@@ -257,17 +258,20 @@ async function processSingleLiquidation(
             balanceTracker.deduct(debtToken, makerAmountWithBuffer);
         }
 
-        logger.info('Liquidation triggered successfully', {
+        logger.info('Liquidation bid submitted successfully', {
             liquidationId,
-            txHash: result.txHash,
+            bidId: result.bidId,
+            status: result.status,
         });
+
+        const borrowerAddress = liquidation.borrowedPosition?.account?.id || liquidation.borrower || '';
 
         getNotificationService().notifyLiquidationTriggered(
             liquidationId,
-            result.txHash,
+            result.bidId,
             {
                 profit: amounts.profit,
-                borrower: liquidation.borrower,
+                borrower: borrowerAddress,
                 marketId: liquidation.marketId,
                 debtAsset: debtToken,
                 collateralAsset: liquidation.collateralAsset,
@@ -291,7 +295,7 @@ async function processSingleLiquidation(
         getNotificationService().notifyApiError('Liquidation trigger', error instanceof Error ? error : new Error(String(error)), {
             liquidationId,
             chainId: Number(liquidation.chainId),
-            borrower: liquidation.borrower,
+            borrower: liquidation.borrowedPosition?.account?.id || liquidation.borrower,
             marketId: liquidation.marketId,
             debtAsset: liquidation.borrowedPosition?.asset?.id,
             collateralAsset: liquidation.collateralAsset,
@@ -361,6 +365,51 @@ function handleWebSocketEvent(event: WebSocketEvent, cfg: AppConfig): void {
 }
 
 /**
+ * Poll pending liquidations for txHash updates
+ * Runs alongside the main loop to track bid execution results
+ */
+async function pollPendingLiquidations(): Promise<void> {
+    try {
+        const pending = getPendingLiquidations(20);
+        if (pending.length === 0) return;
+
+        logger.debug('Polling pending liquidation statuses', { count: pending.length });
+
+        for (const row of pending) {
+            try {
+                const status = await getLiquidationStatus(row.liquidation_id);
+                if (!status) continue;
+
+                const updates: { status?: string; txHash?: string } = {};
+
+                if (status.txHash) {
+                    updates.txHash = status.txHash;
+                    updates.status = 'executed';
+                    logger.info('Liquidation executed on-chain', {
+                        liquidationId: row.liquidation_id,
+                        txHash: status.txHash,
+                    });
+                } else if (status.status === 'failed' || status.status === 'expired') {
+                    updates.status = status.status;
+                    logger.warn('Liquidation did not execute', {
+                        liquidationId: row.liquidation_id,
+                        status: status.status,
+                    });
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    updateLiquidation(row.liquidation_id, updates);
+                }
+            } catch {
+                // Skip individual failures
+            }
+        }
+    } catch (error) {
+        logger.error('Error polling pending liquidations', error instanceof Error ? error : new Error(String(error)));
+    }
+}
+
+/**
  * Main liquidation monitoring loop
  */
 export async function startLiquidationMonitor(): Promise<void> {
@@ -416,6 +465,9 @@ export async function startLiquidationMonitor(): Promise<void> {
 
             // Cleanup old entries
             cleanupProcessedLiquidations();
+
+            // Poll pending liquidations for txHash updates
+            await pollPendingLiquidations();
 
         } catch (error) {
             logger.error('Error in liquidation monitor', error instanceof Error ? error : new Error(String(error)));

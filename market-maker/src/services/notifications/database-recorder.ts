@@ -126,6 +126,7 @@ export class DatabaseRecorder implements Notifier {
 
         insertLiquidation({
             liquidationId,
+            bidId: meta.bidId ? String(meta.bidId) : undefined,
             borrower: String(meta.borrower || ''),
             marketId: meta.marketId ? String(meta.marketId) : undefined,
             debtAsset: String(meta.debtAsset || ''),
@@ -139,7 +140,6 @@ export class DatabaseRecorder implements Notifier {
             makerAmount: String(meta.makerAmount || '0'),
             healthFactor: meta.healthFactor ? Number(meta.healthFactor) : undefined,
             chainId: Number(meta.chainId) || 0,
-            txHash: meta.txHash ? String(meta.txHash) : undefined,
             estimatedProfit: meta.estimatedProfit ? String(meta.estimatedProfit) : undefined,
         });
 

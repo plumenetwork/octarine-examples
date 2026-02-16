@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import type { Redemption, Liquidation } from '../types';
 
@@ -32,6 +33,61 @@ function HealthBadge({ factor }: { factor: number | null | undefined }) {
         ? 'text-orange-600'
         : 'text-green-600';
     return <span className={`font-medium ${color}`}>{factor.toFixed(4)}</span>;
+}
+
+function CopyableId({ value, display }: { value: string; display?: string }) {
+    const [copied, setCopied] = useState(false);
+    const handleClick = () => {
+        navigator.clipboard.writeText(value).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        });
+    };
+    return (
+        <button
+            onClick={handleClick}
+            className="text-gray-600 hover:text-blue-600 cursor-pointer transition-colors"
+            title={`Click to copy: ${value}`}
+        >
+            {copied ? (
+                <span className="text-green-600">copied!</span>
+            ) : (
+                <>{display || `${value.slice(0, 8)}...`}</>
+            )}
+        </button>
+    );
+}
+
+function AddressLink({ address }: { address: string | null | undefined }) {
+    if (!address) return <span className="text-gray-400">-</span>;
+    return (
+        <a
+            href={`https://explorer.plume.org/address/${address}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+            title={address}
+        >
+            {shortenAddress(address)}
+        </a>
+    );
+}
+
+const STATUS_STYLES: Record<string, string> = {
+    pending: 'bg-yellow-100 text-yellow-700',
+    triggered: 'bg-green-100 text-green-700',
+    executed: 'bg-blue-100 text-blue-700',
+    failed: 'bg-red-100 text-red-700',
+    expired: 'bg-gray-100 text-gray-600',
+};
+
+function StatusBadge({ status }: { status: string }) {
+    const style = STATUS_STYLES[status] || 'bg-gray-100 text-gray-600';
+    return (
+        <span className={`px-2 py-1 rounded text-xs ${style}`}>
+            {status}
+        </span>
+    );
 }
 
 interface LiquidationGroup {
@@ -94,6 +150,7 @@ function LiquidationGroupTable({ group }: { group: LiquidationGroup }) {
             <table className="w-full text-sm">
                 <thead>
                     <tr className="text-left text-gray-500 border-b bg-gray-50">
+                        <th className="px-4 py-2">Liquidation</th>
                         <th className="px-4 py-2">Borrower</th>
                         <th className="px-4 py-2">Debt</th>
                         <th className="px-4 py-2">Collateral</th>
@@ -105,9 +162,12 @@ function LiquidationGroupTable({ group }: { group: LiquidationGroup }) {
                 </thead>
                 <tbody>
                     {group.items.map((l) => (
-                        <tr key={l.liquidationId} className="border-b last:border-0 hover:bg-gray-50">
+                        <tr key={`${l.liquidationId}-${l.id}`} className="border-b last:border-0 hover:bg-gray-50">
                             <td className="px-4 py-2 font-mono text-xs">
-                                {shortenAddress(l.borrower)}
+                                <CopyableId value={l.liquidationId} />
+                            </td>
+                            <td className="px-4 py-2 font-mono text-xs">
+                                <AddressLink address={l.borrower} />
                             </td>
                             <td className="px-4 py-2">
                                 {formatNum(l.borrowedAmount)}
@@ -119,15 +179,7 @@ function LiquidationGroupTable({ group }: { group: LiquidationGroup }) {
                                 <HealthBadge factor={l.healthFactor} />
                             </td>
                             <td className="px-4 py-2">
-                                <span
-                                    className={`px-2 py-1 rounded text-xs ${
-                                        l.status === 'triggered'
-                                            ? 'bg-green-100 text-green-700'
-                                            : 'bg-yellow-100 text-yellow-700'
-                                    }`}
-                                >
-                                    {l.status}
-                                </span>
+                                <StatusBadge status={l.status} />
                             </td>
                             <td className="px-4 py-2 text-gray-500">
                                 {format(parseISO(l.createdAt), 'MMM d, HH:mm')}

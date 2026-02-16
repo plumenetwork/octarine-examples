@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SummaryCards } from './SummaryCards';
 import { EarningsChart } from './EarningsChart';
 import { ActivityTable } from './ActivityTable';
@@ -11,7 +11,7 @@ import { useHealth } from '../hooks/useHealth';
 import { useRedemptions } from '../hooks/useRedemptions';
 import { useLiquidations } from '../hooks/useLiquidations';
 import { useFailedTransactions } from '../hooks/useFailedTransactions';
-import { apiClient } from '../api/client';
+import { apiClient, ThrottleStatus } from '../api/client';
 import type { Period } from '../types';
 
 interface DashboardProps {
@@ -20,6 +20,34 @@ interface DashboardProps {
 
 export function Dashboard({ onLogout }: DashboardProps) {
     const [period, setPeriod] = useState<Period>('7d');
+    const [throttle, setThrottle] = useState<ThrottleStatus | null>(null);
+    const [resuming, setResuming] = useState(false);
+
+    const fetchThrottle = useCallback(async () => {
+        try {
+            const s = await apiClient.getThrottleStatus();
+            setThrottle(s);
+        } catch {
+            // ignore
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchThrottle();
+        const interval = setInterval(fetchThrottle, 10_000);
+        return () => clearInterval(interval);
+    }, [fetchThrottle]);
+
+    const handleResume = async () => {
+        setResuming(true);
+        try {
+            await apiClient.resumeThrottle();
+            await fetchThrottle();
+        } catch {
+            // ignore
+        }
+        setResuming(false);
+    };
 
     const { data: stats, isLoading: statsLoading } = useStats(period);
     const { data: health, isLoading: healthLoading } = useHealth();
@@ -51,6 +79,44 @@ export function Dashboard({ onLogout }: DashboardProps) {
                     </div>
                 </div>
             </header>
+
+            {/* Throttle banner */}
+            {throttle?.paused && (
+                <div className="bg-red-600 text-white">
+                    <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="text-lg">&#9888;</span>
+                            <div>
+                                <p className="font-semibold">Liquidation loop paused — API rate limited (429)</p>
+                                <p className="text-sm text-red-200">
+                                    All backoff steps exhausted. The bot will not process liquidations until resumed.
+                                    {throttle.throttledAt && ` Throttled at ${new Date(throttle.throttledAt).toLocaleTimeString()}.`}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleResume}
+                            disabled={resuming}
+                            className="px-4 py-2 bg-white text-red-600 font-medium rounded-lg hover:bg-red-50 disabled:opacity-50"
+                        >
+                            {resuming ? 'Resuming...' : 'Resume'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Throttle warning (backing off but not yet paused) */}
+            {throttle && !throttle.paused && throttle.backoffStep > 0 && (
+                <div className="bg-yellow-500 text-white">
+                    <div className="max-w-7xl mx-auto px-4 py-2 flex items-center gap-3">
+                        <span>&#9888;</span>
+                        <p className="text-sm">
+                            API throttled — backing off (step {throttle.backoffStep}/3).
+                            {throttle.nextBackoffMs && ` Next wait: ${Math.round(throttle.nextBackoffMs / 60000)} min.`}
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* Main content */}
             <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">

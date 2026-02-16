@@ -128,6 +128,22 @@ class ApiClient {
     async triggerOpportunitySync(): Promise<{ message: string }> {
         return this.fetch('/opportunities/sync', { method: 'POST' });
     }
+
+    async getThrottleStatus(): Promise<ThrottleStatus> {
+        return this.fetch('/health/throttle');
+    }
+
+    async resumeThrottle(): Promise<{ success: boolean; message: string }> {
+        return this.fetch('/health/throttle/resume', { method: 'POST' });
+    }
+}
+
+export interface ThrottleStatus {
+    paused: boolean;
+    backoffStep: number;
+    throttledAt: string | null;
+    resumedAt: string | null;
+    nextBackoffMs: number | null;
 }
 
 export interface SyncStatus {

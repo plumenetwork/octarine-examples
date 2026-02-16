@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { getDatabaseSize, getBotUptime } from '../../services/database';
 import { getConfig } from '../../config';
+import { throttleManager } from '../../services/api/throttle';
 
 const router = Router();
 
@@ -30,8 +31,10 @@ router.get('/', (_req, res) => {
         const uptime = getBotUptime();
         const dbSize = getDatabaseSize();
 
+        const throttle = throttleManager.getStatus();
+
         const response: HealthResponse = {
-            status: 'healthy',
+            status: throttle.paused ? 'degraded' : 'healthy',
             uptime,
             database: {
                 connected: true,
@@ -54,6 +57,15 @@ router.get('/', (_req, res) => {
             timestamp: new Date().toISOString(),
         });
     }
+});
+
+router.get('/throttle', (_req, res) => {
+    res.json(throttleManager.getStatus());
+});
+
+router.post('/throttle/resume', (_req, res) => {
+    throttleManager.resume();
+    res.json({ success: true, message: 'Throttle resumed, liquidation loop will restart' });
 });
 
 export { router as healthRoutes };

@@ -97,15 +97,32 @@ export async function runHealthChecks(config: AppConfig): Promise<HealthCheckSum
 }
 
 /**
- * Run health checks and fail fast only if critical checks fail
- * Non-critical failures (e.g. low wallet balance) log a warning but don't crash
+ * Run health checks and fail fast only if critical checks fail.
+ * API Connectivity failures due to 429 throttling are retried with backoff
+ * instead of crashing, since the API may recover.
  */
 export async function requireHealthy(config: AppConfig): Promise<void> {
     const summary = await runHealthChecks(config);
 
-    if (summary.failedCriticalChecks.length > 0) {
-        throw new Error(`Critical health checks failed: ${summary.failedCriticalChecks.join(', ')}`);
+    if (summary.failedCriticalChecks.length === 0) {
+        return; // All good
     }
+
+    // If only failure is API connectivity, it might be a temporary 429 — don't crash
+    const onlyApiDown = summary.failedCriticalChecks.length === 1
+        && summary.failedCriticalChecks[0] === 'API Connectivity';
+
+    if (onlyApiDown) {
+        const apiResult = summary.results.find(r => r.name === 'API Connectivity');
+        const is429 = apiResult?.message?.includes('429');
+
+        if (is429) {
+            logger.warn('API is throttling (429) at startup. Bot will start but liquidation loop will back off automatically.');
+            return; // Let the bot start — the loop will handle the throttle
+        }
+    }
+
+    throw new Error(`Critical health checks failed: ${summary.failedCriticalChecks.join(', ')}`);
 }
 
 // Re-export types

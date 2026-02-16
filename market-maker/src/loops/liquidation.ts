@@ -431,10 +431,16 @@ export async function startLiquidationMonitor(): Promise<void> {
 
     // Main polling loop
     while (true) {
-        // Check if paused due to throttle exhaustion
-        if (throttleManager.isPaused()) {
-            logger.debug('Liquidation loop paused (throttled). Waiting for manual resume from dashboard.');
-            await delay(30_000); // Check every 30s if resumed
+        // Check if throttled — back off or wait for manual resume
+        if (throttleManager.shouldWait()) {
+            if (throttleManager.isPaused()) {
+                logger.debug('Liquidation loop paused (throttled). Waiting for manual resume from dashboard.');
+                await delay(30_000);
+            } else {
+                const remaining = throttleManager.getWaitRemaining();
+                logger.debug(`Liquidation loop backing off for ${Math.round(remaining / 1000)}s due to API throttle`);
+                await delay(Math.min(remaining, 30_000));
+            }
             continue;
         }
 
@@ -442,9 +448,6 @@ export async function startLiquidationMonitor(): Promise<void> {
             const liquidations = await getOpenLiquidations({
                 supportedChains: cfg.supportedChains,
             });
-
-            // API responded successfully — reset throttle backoff
-            throttleManager.onSuccess();
 
             logger.debug('Found liquidation opportunities', { count: liquidations.length });
 
@@ -468,7 +471,7 @@ export async function startLiquidationMonitor(): Promise<void> {
                 }
 
                 // Check throttle between triggers too
-                if (throttleManager.isPaused()) break;
+                if (throttleManager.shouldWait()) break;
 
                 await processSingleLiquidation(liquidation, cfg, balanceTracker);
                 processedLiquidations.set(liquidation._id, Date.now());
@@ -484,18 +487,11 @@ export async function startLiquidationMonitor(): Promise<void> {
             await pollPendingLiquidations();
 
         } catch (error) {
-            if (isThrottleError(error)) {
-                // 429 — escalating backoff: 1min → 5min → 10min → pause
-                const shouldRetry = await throttleManager.onThrottled();
-                if (!shouldRetry) {
-                    // Paused — loop will check isPaused() at the top
-                    continue;
-                }
-                // After backoff wait, try again immediately
-                continue;
+            // 429 is already handled by the API client interceptor (throttleManager.onThrottled)
+            // so we just need to handle non-throttle errors here
+            if (!isThrottleError(error)) {
+                logger.error('Error in liquidation monitor', error instanceof Error ? error : new Error(String(error)));
             }
-
-            logger.error('Error in liquidation monitor', error instanceof Error ? error : new Error(String(error)));
         }
 
         await delay(cfg.liquidationPollIntervalMs);

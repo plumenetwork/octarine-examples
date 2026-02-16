@@ -14,6 +14,7 @@ import { approveTokenToExchangeProxy } from '../services/wallet/approvals';
 import { getPendingRequests, submitBid, getWonBids, callTransform } from '../services/api/rfq';
 import { getNotificationService } from '../services/notifications';
 import { getWebSocket, WebSocketEvent, OctarineWebSocket } from '../services/api/websocket';
+import { throttleManager } from '../services/api/throttle';
 
 const logger = createLogger('bidding');
 
@@ -300,6 +301,19 @@ export async function startBiddingLoop(): Promise<void> {
 
     // Main polling loop (runs alongside WebSocket for redundancy)
     while (true) {
+        // Check if throttled — back off or wait for manual resume
+        if (throttleManager.shouldWait()) {
+            if (throttleManager.isPaused()) {
+                logger.debug('Bidding loop paused (throttled). Waiting for manual resume from dashboard.');
+                await delay(30_000);
+            } else {
+                const remaining = throttleManager.getWaitRemaining();
+                logger.debug(`Bidding loop backing off for ${Math.round(remaining / 1000)}s due to API throttle`);
+                await delay(Math.min(remaining, 30_000));
+            }
+            continue;
+        }
+
         try {
             // Get pending requests
             const requests = await getPendingRequests({

@@ -5,10 +5,13 @@
  *   2nd throttle → wait 5 min
  *   3rd throttle → wait 10 min
  *   Still throttled → pause until manually resumed from dashboard
+ *
+ * The throttle manager is SYNCHRONOUS — it just sets timers.
+ * Both loops check shouldWait() and delay themselves.
+ * The API client interceptor calls onThrottled() on any 429.
  */
 
 import { createLogger } from '../../utils/logger';
-import { delay } from '../../utils/delay';
 
 const logger = createLogger('throttle');
 
@@ -20,15 +23,32 @@ const BACKOFF_STEPS_MS = [
 
 class ThrottleManager {
     private backoffIndex = 0;
-    private paused = false;
+    private _paused = false;
     private throttledAt: Date | null = null;
     private resumedAt: Date | null = null;
+    private waitUntil = 0; // timestamp when backoff expires
 
     /**
-     * Returns true if the loop should be paused (throttle exhausted backoff)
+     * Returns true if all backoff steps are exhausted and manual resume is needed
      */
     isPaused(): boolean {
-        return this.paused;
+        return this._paused;
+    }
+
+    /**
+     * Returns true if the caller should wait (either backing off or paused)
+     */
+    shouldWait(): boolean {
+        if (this._paused) return true;
+        return Date.now() < this.waitUntil;
+    }
+
+    /**
+     * Get ms remaining in current backoff (0 if not backing off)
+     */
+    getWaitRemaining(): number {
+        if (this._paused) return Infinity;
+        return Math.max(0, this.waitUntil - Date.now());
     }
 
     /**
@@ -42,7 +62,7 @@ class ThrottleManager {
         nextBackoffMs: number | null;
     } {
         return {
-            paused: this.paused,
+            paused: this._paused,
             backoffStep: this.backoffIndex,
             throttledAt: this.throttledAt?.toISOString() || null,
             resumedAt: this.resumedAt?.toISOString() || null,
@@ -53,30 +73,31 @@ class ThrottleManager {
     }
 
     /**
-     * Called when a 429 is received. Waits with escalating backoff.
-     * Returns true if we should retry, false if paused (exhausted all backoffs).
+     * Called when a 429 is received (from API interceptor or loop catch).
+     * Synchronous — sets the backoff timer but does NOT block.
+     * If already in a backoff period, does nothing (prevents multi-429 escalation).
      */
-    async onThrottled(): Promise<boolean> {
+    onThrottled(): void {
+        // Already backing off or paused — don't re-escalate
+        if (this._paused || Date.now() < this.waitUntil) {
+            return;
+        }
+
         this.throttledAt = new Date();
 
         if (this.backoffIndex >= BACKOFF_STEPS_MS.length) {
             // Exhausted all backoff steps — pause until manual resume
-            this.paused = true;
-            logger.error('API throttle: all backoff steps exhausted, pausing until manually resumed from dashboard');
-            return false;
+            this._paused = true;
+            logger.error('API throttle: all backoff steps exhausted. Pausing ALL loops until manually resumed from dashboard.');
+            return;
         }
 
         const waitMs = BACKOFF_STEPS_MS[this.backoffIndex];
         const waitMin = Math.round(waitMs / 60_000);
-        logger.warn(`API throttled (429). Waiting ${waitMin} minute(s) before retry (step ${this.backoffIndex + 1}/${BACKOFF_STEPS_MS.length})`, {
-            backoffStep: this.backoffIndex + 1,
-            waitMs,
-        });
+        logger.warn(`API throttled (429). All loops backing off for ${waitMin} minute(s) (step ${this.backoffIndex + 1}/${BACKOFF_STEPS_MS.length})`);
 
+        this.waitUntil = Date.now() + waitMs;
         this.backoffIndex++;
-        await delay(waitMs);
-
-        return true;
     }
 
     /**
@@ -88,15 +109,17 @@ class ThrottleManager {
         }
         this.backoffIndex = 0;
         this.throttledAt = null;
+        this.waitUntil = 0;
     }
 
     /**
      * Resume from paused state (called from dashboard)
      */
     resume(): void {
-        this.paused = false;
+        this._paused = false;
         this.backoffIndex = 0;
         this.throttledAt = null;
+        this.waitUntil = 0;
         this.resumedAt = new Date();
         logger.info('Throttle manager resumed from dashboard');
     }

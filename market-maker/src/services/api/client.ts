@@ -6,6 +6,7 @@ import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { AppConfig } from '../../types';
 import { withRetry, API_RETRY_DEFAULTS } from '../../utils/retry';
 import { createLogger } from '../../utils/logger';
+import { throttleManager } from './throttle';
 
 const logger = createLogger('api');
 
@@ -48,9 +49,11 @@ export function createApiClient(config: ApiClientConfig): AxiosInstance {
         },
     );
 
-    // Response interceptor for logging
+    // Response interceptor for logging + throttle detection
     client.interceptors.response.use(
         (response) => {
+            // Successful response — notify throttle manager to reset backoff
+            throttleManager.onSuccess();
             logger.debug('API Response', {
                 status: response.status,
                 url: response.config.url,
@@ -61,9 +64,14 @@ export function createApiClient(config: ApiClientConfig): AxiosInstance {
             const status = error.response?.status;
             const data = error.response?.data as Record<string, unknown> | undefined;
 
-            logger.error('API Response Error2222', error, {
+            // 429 — notify throttle manager (global, affects all loops)
+            if (status === 429) {
+                throttleManager.onThrottled();
+            }
+
+            logger.error('API Response Error', error, {
                 status,
-                url:  error.config?.baseURL +""+ error.config?.url,
+                url: error.config?.baseURL + '' + error.config?.url,
                 data: typeof data === 'object' ? JSON.stringify(data) : data,
             });
 

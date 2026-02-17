@@ -127,10 +127,24 @@ function groupLiquidations(liquidations: Liquidation[]): LiquidationGroup[] {
 }
 
 function LiquidationGroupTable({ group }: { group: LiquidationGroup }) {
+    const [open, setOpen] = useState(false);
+
     return (
         <div className="border rounded-lg overflow-hidden">
-            <div className="bg-purple-50 px-4 py-3 flex items-center justify-between">
+            <button
+                onClick={() => setOpen(!open)}
+                className="w-full bg-purple-50 px-4 py-3 flex items-center justify-between hover:bg-purple-100 transition-colors cursor-pointer"
+            >
                 <div className="flex items-center gap-3">
+                    <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
                     <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-700">
                         {group.debtAssetSymbol} / {group.collateralAssetSymbol}
                     </span>
@@ -146,62 +160,64 @@ function LiquidationGroupTable({ group }: { group: LiquidationGroup }) {
                         Total collateral: <span className="font-medium text-gray-700">{formatNum(String(group.totalCollateral))}</span> {group.collateralAssetSymbol}
                     </span>
                 </div>
-            </div>
-            <table className="w-full text-sm">
-                <thead>
-                    <tr className="text-left text-gray-500 border-b bg-gray-50">
-                        <th className="px-4 py-2">Liquidation</th>
-                        <th className="px-4 py-2">Borrower</th>
-                        <th className="px-4 py-2">Debt</th>
-                        <th className="px-4 py-2">Collateral</th>
-                        <th className="px-4 py-2">Health</th>
-                        <th className="px-4 py-2">Status</th>
-                        <th className="px-4 py-2">Time</th>
-                        <th className="px-4 py-2">TX</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {group.items.map((l) => (
-                        <tr key={`${l.liquidationId}-${l.id}`} className="border-b last:border-0 hover:bg-gray-50">
-                            <td className="px-4 py-2 font-mono text-xs">
-                                <CopyableId value={l.liquidationId} />
-                            </td>
-                            <td className="px-4 py-2 font-mono text-xs">
-                                <AddressLink address={l.borrower} />
-                            </td>
-                            <td className="px-4 py-2">
-                                {formatNum(l.borrowedAmount)}
-                            </td>
-                            <td className="px-4 py-2">
-                                {formatNum(l.collateralAmount)}
-                            </td>
-                            <td className="px-4 py-2">
-                                <HealthBadge factor={l.healthFactor} />
-                            </td>
-                            <td className="px-4 py-2">
-                                <StatusBadge status={l.status} />
-                            </td>
-                            <td className="px-4 py-2 text-gray-500">
-                                {format(parseISO(l.createdAt), 'MMM d, HH:mm')}
-                            </td>
-                            <td className="px-4 py-2">
-                                {l.txHash ? (
-                                    <a
-                                        href={`https://explorer.plume.org/tx/${l.txHash}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:underline font-mono text-xs"
-                                    >
-                                        {shortenAddress(l.txHash)}
-                                    </a>
-                                ) : (
-                                    '-'
-                                )}
-                            </td>
+            </button>
+            {open && (
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="text-left text-gray-500 border-b bg-gray-50">
+                            <th className="px-4 py-2">Liquidation</th>
+                            <th className="px-4 py-2">Borrower</th>
+                            <th className="px-4 py-2">Debt</th>
+                            <th className="px-4 py-2">Collateral</th>
+                            <th className="px-4 py-2">Health</th>
+                            <th className="px-4 py-2">Status</th>
+                            <th className="px-4 py-2">Time</th>
+                            <th className="px-4 py-2">TX</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {group.items.map((l) => (
+                            <tr key={`${l.liquidationId}-${l.id}`} className="border-b last:border-0 hover:bg-gray-50">
+                                <td className="px-4 py-2 font-mono text-xs">
+                                    <CopyableId value={l.liquidationId} />
+                                </td>
+                                <td className="px-4 py-2 font-mono text-xs">
+                                    <AddressLink address={l.borrower} />
+                                </td>
+                                <td className="px-4 py-2">
+                                    {formatNum(l.borrowedAmount)}
+                                </td>
+                                <td className="px-4 py-2">
+                                    {formatNum(l.collateralAmount)}
+                                </td>
+                                <td className="px-4 py-2">
+                                    <HealthBadge factor={l.healthFactor} />
+                                </td>
+                                <td className="px-4 py-2">
+                                    <StatusBadge status={l.status} />
+                                </td>
+                                <td className="px-4 py-2 text-gray-500">
+                                    {format(parseISO(l.createdAt), 'MMM d, HH:mm')}
+                                </td>
+                                <td className="px-4 py-2">
+                                    {l.txHash ? (
+                                        <a
+                                            href={`https://explorer.plume.org/tx/${l.txHash}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:underline font-mono text-xs"
+                                        >
+                                            {shortenAddress(l.txHash)}
+                                        </a>
+                                    ) : (
+                                        '-'
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
         </div>
     );
 }

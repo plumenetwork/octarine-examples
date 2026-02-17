@@ -87,7 +87,7 @@ class ApiClient {
 
     async getLiquidations(
         period: Period = '7d',
-        limit = 50,
+        limit = 500,
         offset = 0,
     ): Promise<PaginatedResponse<Liquidation>> {
         const params = new URLSearchParams({
@@ -129,6 +129,10 @@ class ApiClient {
         return this.fetch('/opportunities/sync', { method: 'POST' });
     }
 
+    async getOpportunityMarkets(): Promise<{ markets: MarketBreakdownItem[] }> {
+        return this.fetch('/opportunities/markets');
+    }
+
     async getThrottleStatus(): Promise<ThrottleStatus> {
         return this.fetch('/health/throttle');
     }
@@ -144,6 +148,21 @@ export interface ThrottleStatus {
     throttledAt: string | null;
     resumedAt: string | null;
     nextBackoffMs: number | null;
+}
+
+export interface MarketBreakdownItem {
+    debtAsset: string;
+    collateralAsset: string;
+    debtAssetSymbol: string;
+    collateralAssetSymbol: string;
+    count: number;
+    totalBorrowed: string;
+    totalCollateral: string;
+    avgHealthFactor: number;
+    minHealthFactor: number;
+    minBorrowedAmount: string;
+    walletBalance: string | null;
+    sufficientBalance: boolean;
 }
 
 export interface SyncStatus {

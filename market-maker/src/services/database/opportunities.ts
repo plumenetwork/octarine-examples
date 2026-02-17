@@ -75,6 +75,69 @@ export function getOpportunityCount(): number {
     return row.count;
 }
 
+export interface MarketBreakdown {
+    debtAsset: string;
+    collateralAsset: string;
+    debtAssetSymbol: string;
+    collateralAssetSymbol: string;
+    count: number;
+    totalBorrowed: string;
+    totalCollateral: string;
+    avgHealthFactor: number;
+    minHealthFactor: number;
+    minBorrowedAmount: string;
+}
+
+/**
+ * Get opportunity breakdown grouped by market (debt/collateral pair)
+ */
+export function getOpportunityMarketBreakdown(): MarketBreakdown[] {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+        SELECT
+            debt_asset,
+            collateral_asset,
+            COALESCE(debt_asset_symbol, 'Unknown') as debt_asset_symbol,
+            COALESCE(collateral_asset_symbol, 'Unknown') as collateral_asset_symbol,
+            COUNT(*) as count,
+            COALESCE(SUM(CAST(borrowed_amount AS REAL)), 0) as total_borrowed,
+            COALESCE(SUM(CAST(collateral_amount AS REAL)), 0) as total_collateral,
+            COALESCE(AVG(health_factor), 0) as avg_health_factor,
+            COALESCE(MIN(health_factor), 0) as min_health_factor,
+            COALESCE(MIN(CAST(borrowed_amount AS REAL)), 0) as min_borrowed_amount
+        FROM opportunities
+        WHERE debt_asset IS NOT NULL AND collateral_asset IS NOT NULL
+        GROUP BY debt_asset, collateral_asset
+        ORDER BY count DESC
+    `);
+
+    const rows = stmt.all() as Array<{
+        debt_asset: string;
+        collateral_asset: string;
+        debt_asset_symbol: string;
+        collateral_asset_symbol: string;
+        count: number;
+        total_borrowed: number;
+        total_collateral: number;
+        avg_health_factor: number;
+        min_health_factor: number;
+        min_borrowed_amount: number;
+    }>;
+
+    return rows.map(row => ({
+        debtAsset: row.debt_asset,
+        collateralAsset: row.collateral_asset,
+        debtAssetSymbol: row.debt_asset_symbol,
+        collateralAssetSymbol: row.collateral_asset_symbol,
+        count: row.count,
+        totalBorrowed: String(row.total_borrowed),
+        totalCollateral: String(row.total_collateral),
+        avgHealthFactor: row.avg_health_factor,
+        minHealthFactor: row.min_health_factor,
+        minBorrowedAmount: String(row.min_borrowed_amount),
+    }));
+}
+
 export interface GetOpportunitiesOptions {
     chainId?: number;
     limit?: number;

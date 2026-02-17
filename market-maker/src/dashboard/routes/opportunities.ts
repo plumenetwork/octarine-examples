@@ -3,9 +3,10 @@
  */
 
 import { Router } from 'express';
-import { getOpportunityCount, upsertOpportunities, getOpportunities, GetOpportunitiesOptions } from '../../services/database/opportunities';
+import { getOpportunityCount, upsertOpportunities, getOpportunities, getOpportunityMarketBreakdown, GetOpportunitiesOptions } from '../../services/database/opportunities';
 import { fetchAllOpportunities } from '../../services/api/liquidation';
 import { createLogger } from '../../utils/logger';
+import { ethers } from 'ethers';
 
 const logger = createLogger('opportunities-route');
 
@@ -90,6 +91,82 @@ router.post('/sync', async (_req, res) => {
         logger.error('Opportunity sync failed', error instanceof Error ? error : new Error(String(error)));
     } finally {
         syncInProgress = false;
+    }
+});
+
+/**
+ * GET /api/opportunities/markets
+ * Returns opportunity breakdown by market with wallet balance info
+ */
+const balanceCache = new Map<string, { balance: string; fetchedAt: number }>();
+const BALANCE_CACHE_TTL = 60_000; // 60 seconds
+
+router.get('/markets', async (_req, res) => {
+    try {
+        const markets = getOpportunityMarketBreakdown();
+
+        // Try to get wallet balances for each unique debt token
+        let walletAvailable = true;
+        let getBalance: ((addr: string) => Promise<ethers.BigNumber>) | null = null;
+
+        try {
+            const { getWalletManager } = await import('../../services/wallet');
+            const wm = getWalletManager();
+            getBalance = (addr: string) => wm.getTokenBalance(addr);
+        } catch {
+            walletAvailable = false;
+        }
+
+        const result = await Promise.all(
+            markets.map(async (market) => {
+                let walletBalance: string | null = null;
+                let sufficientBalance = false;
+
+                if (walletAvailable && getBalance && market.debtAsset) {
+                    try {
+                        const cached = balanceCache.get(market.debtAsset);
+                        const now = Date.now();
+
+                        if (cached && now - cached.fetchedAt < BALANCE_CACHE_TTL) {
+                            walletBalance = cached.balance;
+                        } else {
+                            const bal = await getBalance(market.debtAsset);
+                            walletBalance = bal.toString();
+                            balanceCache.set(market.debtAsset, { balance: walletBalance, fetchedAt: now });
+                        }
+
+                        // Compare wallet balance against min borrowed amount in this market
+                        const minBorrowed = ethers.BigNumber.from(
+                            market.minBorrowedAmount.includes('.')
+                                ? market.minBorrowedAmount.split('.')[0]
+                                : market.minBorrowedAmount || '0'
+                        );
+                        const bal = ethers.BigNumber.from(walletBalance);
+                        sufficientBalance = bal.gte(minBorrowed) && !minBorrowed.isZero();
+                    } catch {
+                        // Balance fetch failed for this token — leave as null
+                    }
+                }
+
+                return {
+                    ...market,
+                    walletBalance,
+                    sufficientBalance,
+                };
+            }),
+        );
+
+        // Sort: sufficient balance first, then by count desc
+        result.sort((a, b) => {
+            if (a.sufficientBalance !== b.sufficientBalance) {
+                return a.sufficientBalance ? -1 : 1;
+            }
+            return b.count - a.count;
+        });
+
+        res.json({ markets: result });
+    } catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to get market breakdown' });
     }
 });
 

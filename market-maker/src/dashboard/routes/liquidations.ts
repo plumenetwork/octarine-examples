@@ -13,7 +13,7 @@ router.get('/', (req, res) => {
             period: (req.query.period as GetLiquidationsOptions['period']) || '7d',
             chainId: req.query.chainId ? parseInt(req.query.chainId as string, 10) : undefined,
             status: req.query.status as string | undefined,
-            limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 50,
+            limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 500,
             offset: req.query.offset ? parseInt(req.query.offset as string, 10) : 0,
         };
 

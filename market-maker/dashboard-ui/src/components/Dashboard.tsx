@@ -143,15 +143,15 @@ export function Dashboard({ onLogout }: DashboardProps) {
                     isLoading={failedTxLoading}
                 />
 
+                {/* Opportunity sync */}
+                <OpportunitySync />
+
                 {/* Activity table */}
                 <ActivityTable
                     redemptions={redemptionsData?.data}
                     liquidations={liquidationsData?.data}
                     isLoading={redemptionsLoading || liquidationsLoading}
                 />
-
-                {/* Opportunity sync */}
-                <OpportunitySync />
 
                 {/* Bot info */}
                 {health && (

@@ -13,6 +13,98 @@ function formatNum(value: string | null | undefined): string {
     return (num / 1e6).toFixed(2) + 'M';
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+    return (
+        <svg
+            className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+        >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+    );
+}
+
+function MarketRow({ market }: { market: MarketBreakdownItem }) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <div className={`border-b last:border-0 ${!market.sufficientBalance ? 'opacity-50' : ''}`}>
+            <button
+                onClick={() => setOpen(!open)}
+                className="w-full flex items-center gap-3 py-3 px-2 text-left hover:bg-gray-50 transition-colors"
+            >
+                <ChevronIcon open={open} />
+                <span className="inline-flex items-center gap-1">
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                        {market.debtAssetSymbol}
+                    </span>
+                    <span className="text-gray-400">/</span>
+                    <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-xs font-medium">
+                        {market.collateralAssetSymbol}
+                    </span>
+                </span>
+                <span className="text-sm text-gray-600">
+                    {market.count} liquidation{market.count !== 1 ? 's' : ''}
+                </span>
+                <span className="ml-auto">
+                    {market.sufficientBalance ? (
+                        <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                            Ready
+                        </span>
+                    ) : (
+                        <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-full text-xs font-medium">
+                            Insufficient balance
+                        </span>
+                    )}
+                </span>
+            </button>
+
+            {open && (
+                <div className="pb-3 px-2 pl-9 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <p className="text-gray-500 text-xs">Total Borrowed</p>
+                        <p className="font-medium">
+                            {formatNum(market.totalBorrowed)}{' '}
+                            <span className="text-gray-400">{market.debtAssetSymbol}</span>
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-gray-500 text-xs">Total Collateral</p>
+                        <p className="font-medium">
+                            {formatNum(market.totalCollateral)}{' '}
+                            <span className="text-gray-400">{market.collateralAssetSymbol}</span>
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-gray-500 text-xs">Avg Health Factor</p>
+                        <p className={`font-medium ${
+                            market.avgHealthFactor < 0.5
+                                ? 'text-red-600'
+                                : market.avgHealthFactor < 0.8
+                                ? 'text-orange-600'
+                                : 'text-gray-700'
+                        }`}>
+                            {market.avgHealthFactor.toFixed(4)}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-gray-500 text-xs">Wallet Balance</p>
+                        <p className="font-medium font-mono">
+                            {market.walletBalance != null
+                                ? formatNum(market.walletBalance)
+                                : <span className="text-gray-400">N/A</span>
+                            }
+                        </p>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export function OpportunitySync() {
     const [status, setStatus] = useState<SyncStatus | null>(null);
     const [syncing, setSyncing] = useState(false);
@@ -58,14 +150,12 @@ export function OpportunitySync() {
         setError(null);
         try {
             await apiClient.triggerOpportunitySync();
-            // Poll more frequently while syncing
             const poll = setInterval(async () => {
                 const s = await apiClient.getOpportunitySyncStatus();
                 setStatus(s);
                 if (!s.syncInProgress) {
                     setSyncing(false);
                     clearInterval(poll);
-                    // Re-fetch markets after sync completes
                     fetchMarkets();
                 }
             }, 2000);
@@ -148,7 +238,7 @@ export function OpportunitySync() {
                 </div>
             )}
 
-            {/* Market Breakdown Table */}
+            {/* Market Breakdown Accordion */}
             {totalMarkets > 0 && (
                 <div className="mt-6">
                     <div className="flex items-center justify-between mb-3">
@@ -165,79 +255,13 @@ export function OpportunitySync() {
                             </svg>
                         )}
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b text-left text-gray-500">
-                                    <th className="pb-2 pr-4">Market</th>
-                                    <th className="pb-2 pr-4 text-right">Opportunities</th>
-                                    <th className="pb-2 pr-4 text-right">Total Borrowed</th>
-                                    <th className="pb-2 pr-4 text-right">Total Collateral</th>
-                                    <th className="pb-2 pr-4 text-right">Avg Health</th>
-                                    <th className="pb-2 pr-4 text-right">Wallet Balance</th>
-                                    <th className="pb-2">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {markets.map((m) => (
-                                    <tr
-                                        key={`${m.debtAsset}-${m.collateralAsset}`}
-                                        className={`border-b last:border-0 ${
-                                            !m.sufficientBalance ? 'opacity-50' : ''
-                                        }`}
-                                    >
-                                        <td className="py-2 pr-4">
-                                            <span className="inline-flex items-center gap-1">
-                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
-                                                    {m.debtAssetSymbol}
-                                                </span>
-                                                <span className="text-gray-400">/</span>
-                                                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-xs font-medium">
-                                                    {m.collateralAssetSymbol}
-                                                </span>
-                                            </span>
-                                        </td>
-                                        <td className="py-2 pr-4 text-right font-medium">
-                                            {m.count}
-                                        </td>
-                                        <td className="py-2 pr-4 text-right">
-                                            {formatNum(m.totalBorrowed)} <span className="text-gray-400">{m.debtAssetSymbol}</span>
-                                        </td>
-                                        <td className="py-2 pr-4 text-right">
-                                            {formatNum(m.totalCollateral)} <span className="text-gray-400">{m.collateralAssetSymbol}</span>
-                                        </td>
-                                        <td className="py-2 pr-4 text-right">
-                                            <span className={
-                                                m.avgHealthFactor < 0.5
-                                                    ? 'text-red-600'
-                                                    : m.avgHealthFactor < 0.8
-                                                    ? 'text-orange-600'
-                                                    : 'text-gray-700'
-                                            }>
-                                                {m.avgHealthFactor.toFixed(4)}
-                                            </span>
-                                        </td>
-                                        <td className="py-2 pr-4 text-right font-mono text-xs">
-                                            {m.walletBalance != null
-                                                ? formatNum(m.walletBalance)
-                                                : <span className="text-gray-400">N/A</span>
-                                            }
-                                        </td>
-                                        <td className="py-2">
-                                            {m.sufficientBalance ? (
-                                                <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">
-                                                    Ready
-                                                </span>
-                                            ) : (
-                                                <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-full text-xs font-medium">
-                                                    Insufficient balance
-                                                </span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    <div className="border rounded-lg divide-y">
+                        {markets.map((m) => (
+                            <MarketRow
+                                key={`${m.debtAsset}-${m.collateralAsset}`}
+                                market={m}
+                            />
+                        ))}
                     </div>
                 </div>
             )}

@@ -87,7 +87,7 @@ class ApiClient {
 
     async getLiquidations(
         period: Period = '7d',
-        limit = 500,
+        limit = 2000,
         offset = 0,
     ): Promise<PaginatedResponse<Liquidation>> {
         const params = new URLSearchParams({
@@ -133,6 +133,17 @@ class ApiClient {
         return this.fetch('/opportunities/markets');
     }
 
+    async checkPendingLiquidations(): Promise<CheckPendingResponse> {
+        return this.fetch('/liquidations/check-pending', { method: 'POST' });
+    }
+
+    async triggerLiquidation(liquidationId: string): Promise<TriggerLiquidationResponse> {
+        return this.fetch('/liquidations/trigger', {
+            method: 'POST',
+            body: JSON.stringify({ liquidationId }),
+        });
+    }
+
     async getThrottleStatus(): Promise<ThrottleStatus> {
         return this.fetch('/health/throttle');
     }
@@ -140,6 +151,19 @@ class ApiClient {
     async resumeThrottle(): Promise<{ success: boolean; message: string }> {
         return this.fetch('/health/throttle/resume', { method: 'POST' });
     }
+}
+
+export interface CheckPendingResponse {
+    checked: number;
+    updated: { liquidationId: string; newStatus: string; txHash?: string }[];
+}
+
+export interface TriggerLiquidationResponse {
+    success: boolean;
+    bidId?: string;
+    status?: string;
+    message?: string;
+    error?: string;
 }
 
 export interface ThrottleStatus {

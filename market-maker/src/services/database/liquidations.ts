@@ -168,7 +168,7 @@ export interface GetLiquidationsOptions {
  */
 export function getLiquidations(options: GetLiquidationsOptions = {}): { data: LiquidationRow[]; total: number } {
     const db = getDatabase();
-    const { period = '7d', chainId, status, limit = 500, offset = 0 } = options;
+    const { period = '7d', chainId, status, limit = 2000, offset = 0 } = options;
 
     const conditions: string[] = [];
     const params: (string | number)[] = [];

@@ -162,12 +162,13 @@ function shouldLiquidate(liquidation: Liquidation, amounts: LiquidationAmounts, 
 
 /**
  * Process a single liquidation
+ * Returns { bidId, status } on success, null if skipped, throws on error.
  */
-async function processSingleLiquidation(
+export async function processSingleLiquidation(
     liquidation: Liquidation,
     cfg: AppConfig,
     balanceTracker?: BalanceTracker,
-): Promise<void> {
+): Promise<{ bidId: string; status: string } | null> {
     const liquidationId = liquidation._id;
 
     try {
@@ -180,7 +181,7 @@ async function processSingleLiquidation(
         const amounts = calculateLiquidationAmounts(liquidation);
 
         if (!shouldLiquidate(liquidation, amounts, cfg)) {
-            return;
+            return null;
         }
 
         const walletManager = getWalletManager();
@@ -209,7 +210,7 @@ async function processSingleLiquidation(
                     required: makerAmountWithBuffer,
                     available: balanceTracker.getBalance(debtToken),
                 });
-                return;
+                return null;
             }
         }
 
@@ -288,6 +289,8 @@ async function processSingleLiquidation(
             },
         );
 
+        return { bidId: result.bidId, status: result.status };
+
     } catch (error) {
         logger.error('Failed to process liquidation', error instanceof Error ? error : new Error(String(error)), {
             liquidationId,
@@ -302,6 +305,8 @@ async function processSingleLiquidation(
             collateralAsset: liquidation.collateralAsset,
             healthFactor: liquidation.healthFactor,
         });
+
+        throw error;
     }
 }
 

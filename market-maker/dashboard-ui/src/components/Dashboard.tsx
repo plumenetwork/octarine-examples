@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { SummaryCards } from './SummaryCards';
 import { EarningsChart } from './EarningsChart';
 import { ActivityTable } from './ActivityTable';
@@ -19,6 +20,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onLogout }: DashboardProps) {
+    const queryClient = useQueryClient();
     const [period, setPeriod] = useState<Period>('7d');
     const [throttle, setThrottle] = useState<ThrottleStatus | null>(null);
     const [resuming, setResuming] = useState(false);
@@ -150,7 +152,9 @@ export function Dashboard({ onLogout }: DashboardProps) {
                 <ActivityTable
                     redemptions={redemptionsData?.data}
                     liquidations={liquidationsData?.data}
+                    liquidationsTotal={liquidationsData?.pagination?.total}
                     isLoading={redemptionsLoading || liquidationsLoading}
+                    onPendingChecked={() => queryClient.invalidateQueries({ queryKey: ['liquidations'] })}
                 />
 
                 {/* Bot info */}

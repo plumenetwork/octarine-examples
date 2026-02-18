@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
+import { apiClient } from '../api/client';
 import type { Redemption, Liquidation } from '../types';
 
 interface ActivityTableProps {
     redemptions: Redemption[] | undefined;
     liquidations: Liquidation[] | undefined;
+    liquidationsTotal?: number;
     isLoading: boolean;
+    onPendingChecked?: () => void;
 }
 
 function formatNum(value: string | null | undefined): string {
@@ -222,7 +225,64 @@ function LiquidationGroupTable({ group }: { group: LiquidationGroup }) {
     );
 }
 
-export function ActivityTable({ redemptions, liquidations, isLoading }: ActivityTableProps) {
+export function ActivityTable({ redemptions, liquidations, liquidationsTotal, isLoading, onPendingChecked }: ActivityTableProps) {
+    const [checkingPending, setCheckingPending] = useState(false);
+    const [pendingResult, setPendingResult] = useState<string | null>(null);
+    const [triggerInput, setTriggerInput] = useState('');
+    const [triggering, setTriggering] = useState(false);
+    const [triggerResult, setTriggerResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const autoCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const sortedLiquidations = [...(liquidations || [])]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const pendingCount = sortedLiquidations.filter(l => l.status === 'pending').length;
+
+    const handleCheckPending = useCallback(async () => {
+        setCheckingPending(true);
+        setPendingResult(null);
+        try {
+            const res = await apiClient.checkPendingLiquidations();
+            setPendingResult(`Checked ${res.checked}, updated ${res.updated.length}`);
+            if (res.updated.length > 0) {
+                onPendingChecked?.();
+            }
+        } catch (err) {
+            setPendingResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        setCheckingPending(false);
+    }, [onPendingChecked]);
+
+    // Auto-check pending every 60s when there are pending items
+    useEffect(() => {
+        if (pendingCount > 0) {
+            autoCheckRef.current = setInterval(handleCheckPending, 60_000);
+        }
+        return () => {
+            if (autoCheckRef.current) clearInterval(autoCheckRef.current);
+        };
+    }, [pendingCount, handleCheckPending]);
+
+    const handleTrigger = async () => {
+        const id = triggerInput.trim();
+        if (!id) return;
+        setTriggering(true);
+        setTriggerResult(null);
+        try {
+            const res = await apiClient.triggerLiquidation(id);
+            if (res.success) {
+                setTriggerResult({ type: 'success', message: `Bid submitted: ${res.bidId} (${res.status})` });
+                setTriggerInput('');
+                onPendingChecked?.();
+            } else {
+                setTriggerResult({ type: 'error', message: res.message || res.error || 'Trigger failed' });
+            }
+        } catch (err) {
+            setTriggerResult({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+        }
+        setTriggering(false);
+    };
+
     if (isLoading) {
         return (
             <div className="bg-white rounded-lg shadow p-6">
@@ -239,9 +299,6 @@ export function ActivityTable({ redemptions, liquidations, isLoading }: Activity
     const sortedRedemptions = [...(redemptions || [])]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 20);
-
-    const sortedLiquidations = [...(liquidations || [])]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const liquidationGroups = groupLiquidations(sortedLiquidations);
 
@@ -262,12 +319,51 @@ export function ActivityTable({ redemptions, liquidations, isLoading }: Activity
             {/* Liquidations grouped by debt asset */}
             {hasLiquidations && (
                 <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-semibold mb-4">
-                        Liquidations
-                        <span className="text-sm font-normal text-gray-500 ml-2">
-                            {sortedLiquidations.length} total across {liquidationGroups.length} market{liquidationGroups.length !== 1 ? 's' : ''}
-                        </span>
-                    </h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">
+                            Liquidations
+                            <span className="text-sm font-normal text-gray-500 ml-2">
+                                {liquidationsTotal ?? sortedLiquidations.length} total across {liquidationGroups.length} market{liquidationGroups.length !== 1 ? 's' : ''}
+                            </span>
+                        </h3>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleCheckPending}
+                                disabled={checkingPending || pendingCount === 0}
+                                className="px-3 py-1.5 text-xs rounded bg-yellow-100 text-yellow-700 hover:bg-yellow-200 disabled:opacity-50 transition-colors"
+                            >
+                                {checkingPending ? 'Checking...' : `Check Pending (${pendingCount})`}
+                            </button>
+                            {pendingResult && (
+                                <span className="text-xs text-gray-500">{pendingResult}</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Manual trigger */}
+                    <div className="flex items-center gap-2 mb-4">
+                        <input
+                            type="text"
+                            value={triggerInput}
+                            onChange={e => setTriggerInput(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleTrigger()}
+                            placeholder="Liquidation ID to trigger..."
+                            className="flex-1 max-w-md px-3 py-1.5 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-purple-400 font-mono"
+                        />
+                        <button
+                            onClick={handleTrigger}
+                            disabled={triggering || !triggerInput.trim()}
+                            className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                        >
+                            {triggering ? 'Triggering...' : 'Trigger'}
+                        </button>
+                        {triggerResult && (
+                            <span className={`text-xs ${triggerResult.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                                {triggerResult.message}
+                            </span>
+                        )}
+                    </div>
+
                     <div className="space-y-4">
                         {liquidationGroups.map((group) => (
                             <LiquidationGroupTable

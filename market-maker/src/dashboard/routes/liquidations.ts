@@ -3,7 +3,13 @@
  */
 
 import { Router } from 'express';
-import { getLiquidations, GetLiquidationsOptions } from '../../services/database';
+import { getLiquidations, GetLiquidationsOptions, getPendingLiquidations, updateLiquidation } from '../../services/database';
+import { getLiquidationStatus, fetchAllOpportunities } from '../../services/api/liquidation';
+import { processSingleLiquidation } from '../../loops/liquidation';
+import { getConfig } from '../../config';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('dashboard-liquidations');
 
 const router = Router();
 
@@ -13,7 +19,7 @@ router.get('/', (req, res) => {
             period: (req.query.period as GetLiquidationsOptions['period']) || '7d',
             chainId: req.query.chainId ? parseInt(req.query.chainId as string, 10) : undefined,
             status: req.query.status as string | undefined,
-            limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 500,
+            limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 2000,
             offset: req.query.offset ? parseInt(req.query.offset as string, 10) : 0,
         };
 
@@ -55,6 +61,86 @@ router.get('/', (req, res) => {
     } catch (error) {
         res.status(500).json({
             error: error instanceof Error ? error.message : 'Failed to fetch liquidations',
+        });
+    }
+});
+
+/**
+ * Check pending liquidations for status updates
+ */
+router.post('/check-pending', async (_req, res) => {
+    try {
+        const pending = getPendingLiquidations(100);
+        const updated: { liquidationId: string; newStatus: string; txHash?: string }[] = [];
+
+        for (const row of pending) {
+            try {
+                const status = await getLiquidationStatus(row.liquidation_id);
+                if (!status) continue;
+
+                const updates: { status?: string; txHash?: string } = {};
+
+                if (status.txHash) {
+                    updates.txHash = status.txHash;
+                    updates.status = 'executed';
+                } else if (status.status === 'failed' || status.status === 'expired') {
+                    updates.status = status.status;
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    updateLiquidation(row.liquidation_id, updates);
+                    updated.push({
+                        liquidationId: row.liquidation_id,
+                        newStatus: updates.status || row.status,
+                        txHash: updates.txHash,
+                    });
+                }
+            } catch {
+                // Skip individual failures
+            }
+        }
+
+        res.json({ checked: pending.length, updated });
+    } catch (error) {
+        res.status(500).json({
+            error: error instanceof Error ? error.message : 'Failed to check pending liquidations',
+        });
+    }
+});
+
+/**
+ * Manually trigger a liquidation by ID
+ */
+router.post('/trigger', async (req, res) => {
+    try {
+        const { liquidationId } = req.body;
+        if (!liquidationId) {
+            return res.status(400).json({ error: 'liquidationId is required' });
+        }
+
+        const cfg = getConfig();
+
+        // Fetch all opportunities from the API to get full Liquidation objects
+        const { liquidations } = await fetchAllOpportunities();
+        const liquidation = liquidations.find(l => l._id === liquidationId);
+
+        if (!liquidation) {
+            return res.status(404).json({ error: `Liquidation ${liquidationId} not found in current opportunities` });
+        }
+
+        logger.info('Manual liquidation trigger from dashboard', { liquidationId });
+
+        const result = await processSingleLiquidation(liquidation, cfg);
+
+        if (!result) {
+            return res.json({ success: false, message: 'Liquidation skipped (shouldLiquidate=false or insufficient data)' });
+        }
+
+        res.json({ success: true, bidId: result.bidId, status: result.status });
+    } catch (error) {
+        logger.error('Manual liquidation trigger failed', error instanceof Error ? error : new Error(String(error)));
+        res.status(500).json({
+            error: error instanceof Error ? error.message : 'Failed to trigger liquidation',
         });
     }
 });

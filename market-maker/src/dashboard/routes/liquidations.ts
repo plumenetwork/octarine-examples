@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import { getLiquidations, GetLiquidationsOptions, getPendingLiquidations, updateLiquidation } from '../../services/database';
-import { getLiquidationStatus, fetchAllOpportunities } from '../../services/api/liquidation';
+import { getBidStatus, fetchAllOpportunities } from '../../services/api/liquidation';
 import { processSingleLiquidation } from '../../loops/liquidation';
 import { getConfig } from '../../config';
 import { createLogger } from '../../utils/logger';
@@ -75,16 +75,18 @@ router.post('/check-pending', async (_req, res) => {
 
         for (const row of pending) {
             try {
-                const status = await getLiquidationStatus(row.liquidation_id);
-                if (!status) continue;
+                if (!row.bid_id) continue;
+
+                const bidStatus = await getBidStatus(row.bid_id);
+                if (!bidStatus) continue;
 
                 const updates: { status?: string; txHash?: string } = {};
 
-                if (status.txHash) {
-                    updates.txHash = status.txHash;
+                if ((bidStatus.status === 'accepted' && bidStatus.txHash) || bidStatus.txHash) {
+                    updates.txHash = bidStatus.txHash;
                     updates.status = 'executed';
-                } else if (status.status === 'failed' || status.status === 'expired') {
-                    updates.status = status.status;
+                } else if (bidStatus.status === 'failed' || bidStatus.status === 'expired' || bidStatus.status === 'rejected') {
+                    updates.status = bidStatus.status;
                 }
 
                 if (Object.keys(updates).length > 0) {

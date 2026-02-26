@@ -146,7 +146,46 @@ export async function triggerLiquidation(
 }
 
 /**
- * Get liquidation status from the API (for polling txHash after bid)
+ * Get bid status from the API (for polling txHash after bid submission)
+ * Uses the bid endpoint: GET /octarine/bid/{bidId}
+ * A bid with status "accepted" + transactionHash means it was executed on-chain.
+ */
+export async function getBidStatus(
+    bidId: string,
+): Promise<{ status: string; txHash?: string } | null> {
+    const client = getApiClient();
+
+    try {
+        const response = await client.getOnce<ApiResponse<{
+            _id?: string;
+            bidId?: string;
+            status: string;
+            transactionHash?: string;
+            txHash?: string;
+        }>>(
+            `/octarine/bid/${bidId}`,
+            { timeout: 15000 },
+        );
+
+        const data = response.data;
+        const status = data?.status || 'unknown';
+        const txHash = data?.transactionHash || data?.txHash;
+
+        logger.debug('Bid status response', { bidId, status, txHash: txHash?.slice(0, 10) });
+
+        return { status, txHash };
+    } catch (error) {
+        logger.debug('Failed to poll bid status', {
+            bidId,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+    }
+}
+
+/**
+ * @deprecated Use getBidStatus() instead — polls the correct bid endpoint.
+ * Kept for backward compat but the liquidation opportunity endpoint doesn't return bid execution status.
  */
 export async function getLiquidationStatus(
     liquidationId: string,

@@ -12,7 +12,7 @@ import { delay } from '../utils/delay';
 import { signLimitOrder, calculateExpiry, generateSalt } from '../utils/signing';
 import { getWalletManager } from '../services/wallet';
 import { approveTokenToExchangeProxy } from '../services/wallet/approvals';
-import { getOpenLiquidations, triggerLiquidation, getLiquidationStatus } from '../services/api/liquidation';
+import { getOpenLiquidations, triggerLiquidation, getBidStatus } from '../services/api/liquidation';
 import { getPendingLiquidations, updateLiquidation } from '../services/database/liquidations';
 import { throttleManager, isThrottleError } from '../services/api/throttle';
 import { getNotificationService } from '../services/notifications';
@@ -372,7 +372,8 @@ function handleWebSocketEvent(event: WebSocketEvent, cfg: AppConfig): void {
 
 /**
  * Poll pending liquidations for txHash updates
- * Runs alongside the main loop to track bid execution results
+ * Uses GET /octarine/bid/{bidId} to check if bids have been accepted/executed.
+ * A bid with status "accepted" + transactionHash means it was fulfilled on-chain.
  */
 async function pollPendingLiquidations(): Promise<void> {
     try {
@@ -383,23 +384,44 @@ async function pollPendingLiquidations(): Promise<void> {
 
         for (const row of pending) {
             try {
-                const status = await getLiquidationStatus(row.liquidation_id);
-                if (!status) continue;
+                // Need bid_id to check bid status
+                if (!row.bid_id) {
+                    logger.debug('Skipping pending liquidation without bid_id', {
+                        liquidationId: row.liquidation_id,
+                    });
+                    continue;
+                }
+
+                const bidStatus = await getBidStatus(row.bid_id);
+                if (!bidStatus) continue;
 
                 const updates: { status?: string; txHash?: string } = {};
 
-                if (status.txHash) {
-                    updates.txHash = status.txHash;
+                // "accepted" with a txHash means the bid was fulfilled on-chain
+                if (bidStatus.status === 'accepted' && bidStatus.txHash) {
+                    updates.txHash = bidStatus.txHash;
+                    updates.status = 'executed';
+                    logger.info('Liquidation bid accepted and executed on-chain', {
+                        liquidationId: row.liquidation_id,
+                        bidId: row.bid_id,
+                        txHash: bidStatus.txHash,
+                    });
+                } else if (bidStatus.txHash) {
+                    // txHash present with any status = executed
+                    updates.txHash = bidStatus.txHash;
                     updates.status = 'executed';
                     logger.info('Liquidation executed on-chain', {
                         liquidationId: row.liquidation_id,
-                        txHash: status.txHash,
+                        bidId: row.bid_id,
+                        txHash: bidStatus.txHash,
+                        bidStatus: bidStatus.status,
                     });
-                } else if (status.status === 'failed' || status.status === 'expired') {
-                    updates.status = status.status;
-                    logger.warn('Liquidation did not execute', {
+                } else if (bidStatus.status === 'failed' || bidStatus.status === 'expired' || bidStatus.status === 'rejected') {
+                    updates.status = bidStatus.status;
+                    logger.warn('Liquidation bid did not execute', {
                         liquidationId: row.liquidation_id,
-                        status: status.status,
+                        bidId: row.bid_id,
+                        bidStatus: bidStatus.status,
                     });
                 }
 

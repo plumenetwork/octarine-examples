@@ -98,8 +98,10 @@ router.post('/sync', async (_req, res) => {
  * GET /api/opportunities/markets
  * Returns opportunity breakdown by market with wallet balance info
  */
-const balanceCache = new Map<string, { balance: string; fetchedAt: number }>();
+const balanceCache = new Map<string, { balance: string; decimals: number; fetchedAt: number }>();
 const BALANCE_CACHE_TTL = 60_000; // 60 seconds
+
+const ERC20_DECIMALS_ABI = ['function decimals() view returns (uint8)'];
 
 router.get('/markets', async (_req, res) => {
     try {
@@ -107,12 +109,12 @@ router.get('/markets', async (_req, res) => {
 
         // Try to get wallet balances for each unique debt token
         let walletAvailable = true;
-        let getBalance: ((addr: string) => Promise<ethers.BigNumber>) | null = null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let walletManager: any = null;
 
         try {
             const { getWalletManager } = await import('../../services/wallet');
-            const wm = getWalletManager();
-            getBalance = (addr: string) => wm.getTokenBalance(addr);
+            walletManager = getWalletManager();
         } catch {
             walletAvailable = false;
         }
@@ -122,18 +124,35 @@ router.get('/markets', async (_req, res) => {
                 let walletBalance: string | null = null;
                 let sufficientBalance = false;
 
-                if (walletAvailable && getBalance && market.debtAsset) {
+                if (walletAvailable && walletManager && market.debtAsset) {
                     try {
                         const cached = balanceCache.get(market.debtAsset);
                         const now = Date.now();
 
+                        let rawBalance: string;
+                        let decimals: number;
+
                         if (cached && now - cached.fetchedAt < BALANCE_CACHE_TTL) {
-                            walletBalance = cached.balance;
+                            rawBalance = cached.balance;
+                            decimals = cached.decimals;
                         } else {
-                            const bal = await getBalance(market.debtAsset);
-                            walletBalance = bal.toString();
-                            balanceCache.set(market.debtAsset, { balance: walletBalance, fetchedAt: now });
+                            const bal = await walletManager.getTokenBalance(market.debtAsset);
+                            rawBalance = bal.toString();
+
+                            // Fetch token decimals
+                            try {
+                                const provider = walletManager.getWallet().provider;
+                                const contract = new ethers.Contract(market.debtAsset, ERC20_DECIMALS_ABI, provider);
+                                decimals = await contract.decimals();
+                            } catch {
+                                decimals = 18; // fallback
+                            }
+
+                            balanceCache.set(market.debtAsset, { balance: rawBalance, decimals, fetchedAt: now });
                         }
+
+                        // Format with proper decimals for display
+                        walletBalance = ethers.utils.formatUnits(rawBalance, decimals);
 
                         // Compare wallet balance against min borrowed amount in this market
                         const minBorrowed = ethers.BigNumber.from(
@@ -141,7 +160,7 @@ router.get('/markets', async (_req, res) => {
                                 ? market.minBorrowedAmount.split('.')[0]
                                 : market.minBorrowedAmount || '0'
                         );
-                        const bal = ethers.BigNumber.from(walletBalance);
+                        const bal = ethers.BigNumber.from(rawBalance);
                         sufficientBalance = bal.gte(minBorrowed) && !minBorrowed.isZero();
                     } catch {
                         // Balance fetch failed for this token — leave as null

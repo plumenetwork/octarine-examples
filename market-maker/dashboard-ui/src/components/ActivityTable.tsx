@@ -234,6 +234,7 @@ export function ActivityTable({ redemptions, liquidations, liquidationsTotal, is
     const autoCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const sortedLiquidations = [...(liquidations || [])]
+        .filter(l => l.status !== 'expired')
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const pendingCount = sortedLiquidations.filter(l => l.status === 'pending').length;

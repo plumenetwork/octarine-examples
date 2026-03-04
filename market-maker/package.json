@@ -1,27 +1,44 @@
 {
     "name": "octarine-market-maker",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "description": "Market Maker bot for Octarine instant redemptions and liquidations",
     "main": "dist/index.js",
     "scripts": {
         "build": "tsc",
         "start": "node dist/index.js",
-        "bid": "ts-node src/instant-redemption-bidding.ts",
-        "liquidate": "ts-node src/liquidation-trigger.ts",
+        "dev": "ts-node src/index.ts",
+        "bid": "ts-node src/loops/bidding.ts",
+        "liquidate": "ts-node src/loops/liquidation.ts",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
-    "keywords": [],
+    "keywords": [
+        "octarine",
+        "market-maker",
+        "defi",
+        "plume"
+    ],
     "author": "",
     "license": "ISC",
     "dependencies": {
         "@0x/protocol-utils": "^11.23.0",
         "@0x/utils": "^7.0.0",
+        "@google-cloud/secret-manager": "^5.6.0",
+        "@slack/webhook": "^7.0.0",
+        "async-mutex": "^0.4.0",
         "axios": "^1.6.0",
+        "better-sqlite3": "^12.5.0",
+        "cors": "^2.8.5",
         "dotenv": "^16.3.1",
-        "ethers": "^5.7.2"
+        "ethers": "^5.7.2",
+        "express": "^5.2.1",
+        "ws": "^8.14.0"
     },
     "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
         "@types/node": "^20.8.0",
+        "@types/ws": "^8.5.0",
         "ts-node": "^10.9.1",
         "typescript": "^5.2.2"
     }
